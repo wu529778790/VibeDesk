@@ -38,7 +38,11 @@ export function handleRoomMessage(
   }
 
   if (msg.type === "leave_room") {
+    const peer = rooms.getPeer(ws);
     rooms.removeByWs(ws);
+    if (peer) {
+      peer.send(JSON.stringify({ type: "peer_left", peerId: "peer" }));
+    }
     return true;
   }
 
