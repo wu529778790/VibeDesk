@@ -1,6 +1,6 @@
 # VibeDesk
 
-A high-performance, cross-platform remote desktop control system powered by WebRTC, Dart, and C++, featuring low-latency P2P screen sharing and control.
+A high-performance, cross-platform remote desktop control system powered by WebRTC and Flutter, featuring low-latency P2P screen sharing and control.
 
 [中文文档](README.zh.md)
 

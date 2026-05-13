@@ -1,6 +1,6 @@
 # VibeDesk
 
-基于 WebRTC 的高性能跨平台远程桌面控制系统，采用 Dart & C++ 构建，实现低延迟 P2P 屏幕共享与远程操控。
+基于 WebRTC 的高性能跨平台远程桌面控制系统，采用 Flutter 构建，实现低延迟 P2P 屏幕共享与远程操控。
 
 ![VibeDesk 架构图](docs/diagrams/architecture.svg)
 
