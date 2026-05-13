@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'signaling_client.dart';
 
 const _kServerUrlKey = 'signal_server_url';
-const defaultSignalServerUrl = 'wss://signal.vibedesk.app';
+const defaultSignalServerUrl = 'ws://43.128.70.75:6666';
 
 // ---------------------------------------------------------------------------
 // Persistent server URL
