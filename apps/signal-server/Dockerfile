@@ -1,13 +1,13 @@
 FROM node:22-alpine
 WORKDIR /workspace
 
-# Copy protocol package and install its dependencies
+# Copy and build protocol package
 COPY packages/protocol/package.json packages/protocol/package-lock.json ./packages/protocol/
 COPY packages/protocol/tsconfig.json ./packages/protocol/
 COPY packages/protocol/src/ ./packages/protocol/src/
-RUN cd packages/protocol && npm install
+RUN cd packages/protocol && npm install && npm run build
 
-# Copy signal server and install its dependencies
+# Copy and build signal server
 COPY apps/signal-server/package.json apps/signal-server/package-lock.json ./apps/signal-server/
 COPY apps/signal-server/tsconfig.json ./apps/signal-server/
 COPY apps/signal-server/src/ ./apps/signal-server/src/
