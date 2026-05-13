@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@vibedesk/protocol": "file:../../packages/protocol",
     "fastify": "^5.3.3",
     "ws": "^8.18.2",
     "uuid": "^11.1.0",
