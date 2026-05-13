@@ -1,14 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/signaling/signal_server_provider.dart';
 import '../domain/ice_config.dart';
 
 final iceConfigProvider = StateProvider<IceConfig>((ref) => const IceConfig());
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  late TextEditingController _serverController;
+
+  @override
+  void initState() {
+    super.initState();
+    final url = ref.read(signalServerProvider).valueOrNull ?? '';
+    _serverController = TextEditingController(text: url);
+  }
+
+  @override
+  void dispose() {
+    _serverController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final config = ref.watch(iceConfigProvider);
 
     return Scaffold(
@@ -16,6 +37,40 @@ class SettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Signal Server
+          const Text(
+            'Signal Server',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _serverController,
+            decoration: const InputDecoration(
+              labelText: 'Server URL',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.dns),
+              hintText: 'wss://signal.vibedesk.app',
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () {
+                final url = _serverController.text.trim();
+                if (url.isNotEmpty) {
+                  ref.read(signalServerProvider.notifier).setUrl(url);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Server URL saved')),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // ICE Servers
           const Text(
             'ICE Servers',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
