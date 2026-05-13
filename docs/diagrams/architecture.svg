@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap');
+    text { font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace; }
+  </style>
+
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="100%" height="100%" fill="#0f172a"/>
+  <rect width="100%" height="100%" fill="url(#grid)"/>
+
+  <!-- Title -->
+  <text x="40" y="40" fill="white" font-size="18" font-weight="700">VibeDesk Architecture</text>
+  <text x="40" y="58" fill="#94a3b8" font-size="10">WebRTC-based Remote Desktop Control System</text>
+
+  <!-- Region: Flutter Apps -->
+  <rect x="40" y="80" width="720" height="140" rx="12" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="56" y="98" fill="#22d3ee" font-size="9" font-weight="600">Flutter Desktop Apps</text>
+
+  <!-- Host App -->
+  <rect x="60" y="110" width="320" height="90" rx="6" fill="#0f172a"/>
+  <rect x="60" y="110" width="320" height="90" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="220" y="140" fill="white" font-size="12" font-weight="600" text-anchor="middle">Host App</text>
+  <text x="220" y="158" fill="#94a3b8" font-size="9" text-anchor="middle">Screen Capture + Input Injection</text>
+  <text x="220" y="175" fill="#94a3b8" font-size="8" text-anchor="middle">WebRTCManager | ScreenCapturer | InputInjector</text>
+
+  <!-- Client App -->
+  <rect x="420" y="110" width="320" height="90" rx="6" fill="#0f172a"/>
+  <rect x="420" y="110" width="320" height="90" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="580" y="140" fill="white" font-size="12" font-weight="600" text-anchor="middle">Client App</text>
+  <text x="580" y="158" fill="#94a3b8" font-size="9" text-anchor="middle">Remote Viewer + Control Overlay</text>
+  <text x="580" y="175" fill="#94a3b8" font-size="8" text-anchor="middle">RTCVideoView | GestureDetector | KeyboardListener</text>
+
+  <!-- Region: Signal Server -->
+  <rect x="220" y="250" width="360" height="100" rx="12" fill="none" stroke="#34d399" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="236" y="268" fill="#34d399" font-size="9" font-weight="600">Signal Server (Node.js)</text>
+
+  <!-- Signal Server Components -->
+  <rect x="240" y="280" width="100" height="50" rx="6" fill="#0f172a"/>
+  <rect x="240" y="280" width="100" height="50" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="290" y="302" fill="white" font-size="10" font-weight="600" text-anchor="middle">Room</text>
+  <text x="290" y="318" fill="#94a3b8" font-size="8" text-anchor="middle">Manager</text>
+
+  <rect x="350" y="280" width="100" height="50" rx="6" fill="#0f172a"/>
+  <rect x="350" y="280" width="100" height="50" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="400" y="302" fill="white" font-size="10" font-weight="600" text-anchor="middle">Signaling</text>
+  <text x="400" y="318" fill="#94a3b8" font-size="8" text-anchor="middle">Relay</text>
+
+  <rect x="460" y="280" width="100" height="50" rx="6" fill="#0f172a"/>
+  <rect x="460" y="280" width="100" height="50" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+  <text x="510" y="302" fill="white" font-size="10" font-weight="600" text-anchor="middle">WebSocket</text>
+  <text x="510" y="318" fill="#94a3b8" font-size="8" text-anchor="middle">Handler</text>
+
+  <!-- Region: WebRTC P2P -->
+  <rect x="100" y="390" width="600" height="80" rx="12" fill="none" stroke="#a78bfa" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="116" y="408" fill="#a78bfa" font-size="9" font-weight="600">WebRTC P2P Connection</text>
+
+  <!-- Video Stream -->
+  <rect x="140" y="420" width="200" height="35" rx="6" fill="#0f172a"/>
+  <rect x="140" y="420" width="200" height="35" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="240" y="442" fill="white" font-size="10" font-weight="600" text-anchor="middle">Video Stream (SDP)</text>
+
+  <!-- DataChannel -->
+  <rect x="460" y="420" width="200" height="35" rx="6" fill="#0f172a"/>
+  <rect x="460" y="420" width="200" height="35" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="560" y="442" fill="white" font-size="10" font-weight="600" text-anchor="middle">DataChannel (Input)</text>
+
+  <!-- Region: Input Injection -->
+  <rect x="220" y="500" width="360" height="70" rx="12" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+  <text x="236" y="518" fill="#fbbf24" font-size="9" font-weight="600">Platform Input Injection</text>
+
+  <!-- Win32 -->
+  <rect x="240" y="528" width="140" height="30" rx="6" fill="#0f172a"/>
+  <rect x="240" y="528" width="140" height="30" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="310" y="547" fill="white" font-size="9" font-weight="600" text-anchor="middle">Win32 (SendInput)</text>
+
+  <!-- CGEvent -->
+  <rect x="400" y="528" width="160" height="30" rx="6" fill="#0f172a"/>
+  <rect x="400" y="528" width="160" height="30" rx="6" fill="rgba(120,53,15,0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+  <text x="480" y="547" fill="white" font-size="9" font-weight="600" text-anchor="middle">macOS (CGEvent)</text>
+
+  <!-- Connection Arrows -->
+
+  <!-- Host to Signal Server -->
+  <path d="M 220,200 L 220,230 L 290,230 L 290,280" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+  <text x="235" y="248" fill="#22d3ee" font-size="8" text-anchor="middle">WebSocket</text>
+
+  <!-- Client to Signal Server -->
+  <path d="M 580,200 L 580,230 L 510,230 L 510,280" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+  <text x="565" y="248" fill="#22d3ee" font-size="8" text-anchor="middle">WebSocket</text>
+
+  <!-- Host to WebRTC Video -->
+  <path d="M 220,200 L 220,380 L 240,420" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="195" y="395" fill="#a78bfa" font-size="8" text-anchor="middle">SDP Offer</text>
+
+  <!-- Client to WebRTC Video -->
+  <path d="M 580,200 L 580,380 L 560,420" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text x="605" y="395" fill="#a78bfa" font-size="8" text-anchor="middle">SDP Answer</text>
+
+  <!-- Video to DataChannel -->
+  <path d="M 340,437 L 460,437" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- DataChannel to Input Injection -->
+  <path d="M 560,455 L 560,480 L 480,480 L 480,528" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrow-amber)"/>
+  <text x="545" y="498" fill="#fbbf24" font-size="8" text-anchor="middle">JSON Events</text>
+
+  <!-- Legend -->
+  <rect x="580" y="560" width="180" height="30" rx="6" fill="rgba(30,41,59,0.8)" stroke="#475569" stroke-width="1"/>
+  <text x="590" y="578" fill="#94a3b8" font-size="8">Legend:</text>
+  <circle cx="640" cy="575" r="4" fill="#22d3ee"/>
+  <text x="650" y="578" fill="#94a3b8" font-size="8">WebSocket</text>
+  <circle cx="700" cy="575" r="4" fill="#a78bfa"/>
+  <text x="710" y="578" fill="#94a3b8" font-size="8">WebRTC</text>
+  <circle cx="755" cy="575" r="4" fill="#fbbf24"/>
+  <text x="765" y="578" fill="#94a3b8" font-size="8">Input</text>
+
+</svg>

@@ -39,21 +39,13 @@ flutter run -d macos  # or -d windows, -d linux
 
 ## Architecture
 
-```
-┌─────────────────┐     WebSocket      ┌─────────────────┐
-│   Signal Server  │◄──────────────────►│  Flutter Apps   │
-│   (Node.js)      │                    │  (Host/Client)  │
-└─────────────────┘                    └────────┬────────┘
-                                                │
-                                    ┌───────────┴───────────┐
-                                    │   WebRTC P2P Connection │
-                                    │   (Video + DataChannel) │
-                                    └─────────────────────────┘
-```
+![VibeDesk Architecture](docs/diagrams/architecture.svg)
 
 - **Signal Server**: Handles room management and WebRTC signaling
 - **Host**: Captures screen, sends video via WebRTC, receives input events
 - **Client**: Displays remote screen, captures input, sends via DataChannel
+- **WebRTC P2P**: Direct peer-to-peer connection for video and input data
+- **Input Injection**: Platform-specific mouse/keyboard simulation (Win32, CGEvent)
 
 See [docs/architecture.md](docs/architecture.md) for detailed architecture.
 
@@ -62,7 +54,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture.
 - **Frontend**: Flutter Desktop (WebRTC, Riverpod, GoRouter)
 - **Backend**: Node.js + Fastify + WebSocket
 - **Protocol**: WebRTC (Video Stream + DataChannel for input)
-- **Input Injection**: Win32 API (Windows), CGEvent (macOS) - coming soon
+- **Input Injection**: Win32 API (Windows), CGEvent (macOS)
 
 ## Development
 
