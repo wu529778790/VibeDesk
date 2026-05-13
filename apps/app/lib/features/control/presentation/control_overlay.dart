@@ -23,6 +23,7 @@ class ControlOverlay extends StatefulWidget {
 
 class _ControlOverlayState extends State<ControlOverlay> {
   final FocusNode _focusNode = FocusNode();
+  final _appLifecycleListener = _AppLifecycleObserver();
   Offset _lastPosition = Offset.zero;
   bool _isControlling = false;
 
@@ -198,12 +199,32 @@ class _ControlOverlayState extends State<ControlOverlay> {
   @override
   void initState() {
     super.initState();
+    _appLifecycleListener.onInactive = _exitControl;
     _focusNode.requestFocus();
+    WidgetsBinding.instance.addObserver(_appLifecycleListener);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_appLifecycleListener);
     _focusNode.dispose();
     super.dispose();
+  }
+}
+
+class _AppLifecycleObserver with WidgetsBindingObserver {
+  VoidCallback? onResumed;
+  VoidCallback? onInactive;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        onResumed?.call();
+      case AppLifecycleState.inactive:
+        onInactive?.call();
+      default:
+        break;
+    }
   }
 }
