@@ -18,6 +18,8 @@ dependencies:
   json_annotation: ^4.9.0
   web_socket_channel: ^3.0.2
   uuid: ^4.5.1
+  ffi: ^2.1.0
+  win32: ^6.0.0
 
 dev_dependencies:
   flutter_test:

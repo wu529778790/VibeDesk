@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -9,6 +11,8 @@ import '../../../core/webrtc/webrtc_manager.dart';
 import '../../../features/settings/presentation/settings_screen.dart'
     show iceConfigProvider;
 import '../../control/domain/input_event.dart' as input;
+import '../../control/domain/input_injector.dart';
+import '../../control/infra/input_injector_factory.dart';
 import '../../control/presentation/control_overlay.dart';
 import '../../screen/presentation/screen_provider.dart';
 import '../../../shared/widgets/connection_status.dart';
@@ -30,6 +34,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   SignalingClient? _signaling;
   WebRTCManager? _webrtc;
   ScreenCapturer? _capturer;
+  InputInjector? _inputInjector;
 
   // UI state
   SignalingState _signalingState = SignalingState.disconnected;
@@ -45,6 +50,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     _serverController.dispose();
     _roomIdController.dispose();
     _capturer?.stop();
+    _inputInjector?.dispose();
     _webrtc?.dispose();
     _signaling?.dispose();
     super.dispose();
@@ -163,7 +169,11 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
           });
         },
         onRemoteStream: (_) {},
-        onDataChannel: (_) {},
+        onDataChannel: (channel) {
+          Logger.info('Host: data channel received: ${channel.label}');
+          _inputInjector = createInputInjector();
+          channel.onMessage = _handleDataChannelMessage;
+        },
       );
 
       await _webrtc!.initialize(iceServers: iceServers);
@@ -299,7 +309,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   }
 
   // ---------------------------------------------------------------------------
-  // DataChannel input sending
+  // DataChannel input handling
   // ---------------------------------------------------------------------------
 
   void _sendInputEvent(input.InputEvent event) {
@@ -307,6 +317,67 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     if (dc != null) {
       dc.send(RTCDataChannelMessage(event.serialize()));
     }
+  }
+
+  void _handleDataChannelMessage(RTCDataChannelMessage message) {
+    try {
+      final json = jsonDecode(message.text) as Map<String, dynamic>;
+      final type = json['type'] as String?;
+      if (type == null || _inputInjector == null) return;
+
+      final x = (json['x'] as num?)?.toInt() ?? 0;
+      final y = (json['y'] as num?)?.toInt() ?? 0;
+
+      switch (type) {
+        case 'mouse_move':
+          _inputInjector!.mouseMove(x, y);
+        case 'mouse_down':
+          final button = _parseMouseButton(json['button'] as String);
+          _inputInjector!.mouseDown(x, y, button);
+        case 'mouse_up':
+          final button = _parseMouseButton(json['button'] as String);
+          _inputInjector!.mouseUp(x, y, button);
+        case 'key_down':
+          final key = json['key'] as String? ?? '';
+          final modifiers = _parseModifiers(json['modifiers']);
+          _inputInjector!.keyDown(key, modifiers);
+        case 'key_up':
+          final key = json['key'] as String? ?? '';
+          final modifiers = _parseModifiers(json['modifiers']);
+          _inputInjector!.keyUp(key, modifiers);
+      }
+    } catch (e) {
+      Logger.error('Failed to handle data channel message', e);
+    }
+  }
+
+  input.MouseButton _parseMouseButton(String? name) {
+    switch (name) {
+      case 'right':
+        return input.MouseButton.right;
+      case 'middle':
+        return input.MouseButton.middle;
+      default:
+        return input.MouseButton.left;
+    }
+  }
+
+  List<input.ModifierKey> _parseModifiers(dynamic modifiers) {
+    if (modifiers is! List) return [];
+    return modifiers.map((m) {
+      switch (m) {
+        case 'shift':
+          return input.ModifierKey.shift;
+        case 'ctrl':
+          return input.ModifierKey.ctrl;
+        case 'alt':
+          return input.ModifierKey.alt;
+        case 'meta':
+          return input.ModifierKey.meta;
+        default:
+          return input.ModifierKey.shift;
+      }
+    }).toList();
   }
 
   // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ class ControlOverlay extends StatefulWidget {
 
 class _ControlOverlayState extends State<ControlOverlay> {
   final FocusNode _focusNode = FocusNode();
+  Offset _lastPosition = Offset.zero;
 
   List<input.ModifierKey> _getActiveModifiers() {
     return [
@@ -37,12 +38,14 @@ class _ControlOverlayState extends State<ControlOverlay> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanUpdate: (details) {
+          _lastPosition = details.localPosition;
           widget.onInputEvent(input.MouseMoveEvent(
             details.localPosition.dx,
             details.localPosition.dy,
           ));
         },
         onPanDown: (details) {
+          _lastPosition = details.localPosition;
           widget.onInputEvent(input.MouseDownEvent(
             details.localPosition.dx,
             details.localPosition.dy,
@@ -50,7 +53,11 @@ class _ControlOverlayState extends State<ControlOverlay> {
           ));
         },
         onPanEnd: (_) {
-          widget.onInputEvent(input.MouseUpEvent(0, 0, input.MouseButton.left));
+          widget.onInputEvent(input.MouseUpEvent(
+            _lastPosition.dx,
+            _lastPosition.dy,
+            input.MouseButton.left,
+          ));
         },
         onSecondaryTapDown: (details) {
           widget.onInputEvent(input.MouseDownEvent(
