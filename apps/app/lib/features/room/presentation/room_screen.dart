@@ -137,6 +137,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     if (code.isEmpty) return;
     _signaling!.send({'type': 'join_room', 'roomId': code});
     setState(() {
+      _roomCode = code;
       _connectionStatus = ConnectionStatus.connecting;
     });
   }
