@@ -1,6 +1,6 @@
 # VibeDesk
 
-WebRTC-based remote desktop control system. Share your screen and allow remote control from another machine.
+A high-performance, cross-platform remote desktop control system powered by WebRTC, Dart, and C++, featuring low-latency P2P screen sharing and control.
 
 [中文文档](README.zh.md)
 
@@ -39,16 +39,14 @@ Launch VibeDesk on both machines.
 
 **Host (被控制端):**
 1. Select "Share Screen"
-2. Enter the signal server address (default: `ws://43.128.70.75:6666`)
-3. Click "Connect"
-4. Share the displayed room code with the client
+2. Click "Connect"
+3. Share the displayed room code with the client
 
 **Client (控制端):**
 1. Select "Remote Control"
-2. Enter the signal server address
-3. Click "Connect"
-4. Enter the room code from the host
-5. Click "Join Room"
+2. Click "Connect"
+3. Enter the room code from the host
+4. Click "Join Room"
 
 ### 3. Control
 
