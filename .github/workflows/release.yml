@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: apps/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.x"
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build macos --release
+      - run: |
+          cd build/macos/Build/Products/Release
+          zip -r "$GITHUB_WORKSPACE/VibeDesk-macOS.zip" "VibeDesk Desktop.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VibeDesk-macOS
+          path: VibeDesk-macOS.zip
+
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.x"
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build windows --release
+      - uses: thedoctor0/zip-release@0.7.6
+        with:
+          type: zip
+          directory: apps/app/build/windows/x64/runner/Release
+          filename: VibeDesk-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VibeDesk-Windows
+          path: apps/app/build/windows/x64/runner/Release/VibeDesk-Windows.zip
+
+  release:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: VibeDesk-macOS
+          path: ./artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: VibeDesk-Windows
+          path: ./artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/*.zip
+          generate_release_notes: true
