@@ -84,13 +84,14 @@ services:
 - [ ] TURN server integration (NAT traversal)
 - [ ] Auto-reconnect mechanism
 - [ ] Connection quality indicator
-- [ ] Coordinate scaling
+- [x] Coordinate scaling
 - [ ] macOS input injection (CGEvent)
 
 ### v0.3.x - Platform Expansion & Features
 
 - [ ] Windows ARM64 support
 - [ ] Linux input injection (xdotool/uinput)
+- [ ] Account system (same account, auto-discover devices, no room code needed)
 - [ ] File transfer
 - [ ] Clipboard sync (bidirectional)
 - [ ] Multi-monitor support
