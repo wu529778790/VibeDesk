@@ -11,8 +11,15 @@ WebRTC-based remote desktop control system. Share your screen and allow remote c
 - **Screen Sharing**: Host shares screen via WebRTC P2P connection
 - **Remote Viewing**: Client sees host screen in real-time
 - **Remote Control**: Client can click, move, and type on host screen
-- **Cross-Platform**: Works between Windows, macOS, and Linux
 - **Low Latency**: Direct P2P connection via WebRTC
+
+## Platform Support
+
+| Platform | Screen Viewing | Remote Control |
+|----------|---------------|----------------|
+| Windows  | ✓             | ✓              |
+| macOS    | ✓             | ✓              |
+| Linux    | ✓             | ✗ (coming soon) |
 
 ## Download
 
