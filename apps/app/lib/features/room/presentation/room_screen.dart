@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import '../../../app.dart' show UserRole;
+import 'package:go_router/go_router.dart';
+import '../../../shared/models/user_role.dart';
 import '../../../core/logger.dart';
+import '../../../core/signaling/signal_server_provider.dart';
 import '../../../core/signaling/signaling_client.dart';
+import '../../settings/presentation/settings_screen.dart' show iceConfigProvider;
 import '../../../core/webrtc/screen_capturer.dart';
 import '../../../core/webrtc/webrtc_manager.dart';
-import '../../../features/settings/presentation/settings_screen.dart'
-    show iceConfigProvider;
 import '../../control/domain/input_event.dart' as input;
 import '../../control/domain/input_injector.dart';
 import '../../control/infra/input_injector_factory.dart';
@@ -27,7 +28,6 @@ class RoomScreen extends ConsumerStatefulWidget {
 
 class _RoomScreenState extends ConsumerState<RoomScreen> {
   // Controllers
-  final _serverController = TextEditingController(text: 'ws://43.128.70.75:6666');
   final _roomIdController = TextEditingController();
 
   // Core instances owned by this widget
@@ -46,8 +46,13 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   bool get _isHost => widget.role == UserRole.host;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _connectSignaling());
+  }
+
+  @override
   void dispose() {
-    _serverController.dispose();
     _roomIdController.dispose();
     _capturer?.stop();
     _inputInjector?.dispose();
@@ -61,8 +66,8 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   // ---------------------------------------------------------------------------
 
   void _connectSignaling() {
-    final url = _serverController.text.trim();
-    if (url.isEmpty) return;
+    final url = ref.read(signalServerProvider).valueOrNull;
+    if (url == null || url.isEmpty) return;
 
     _signaling = SignalingClient(
       onMessage: _handleSignalingMessage,
@@ -102,19 +107,15 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         });
 
       case 'peer_joined':
-        // Host receives this when a client joins — start WebRTC negotiation
         _startHostNegotiation();
 
       case 'room_joined':
-        // Client successfully joined, wait for offer
         Logger.info('Room joined, waiting for offer...');
 
       case 'offer':
-        // Client receives offer from host
         _handleOffer(msg.data['sdp'] as String);
 
       case 'answer':
-        // Host receives answer from client
         _handleAnswer(msg.data['sdp'] as String);
 
       case 'ice_candidate':
@@ -418,6 +419,10 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     if (_connectionStatus == ConnectionStatus.connected && _isHost) {
       return AppBar(
         title: const Text('Sharing Screen'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _disconnectAndGoBack,
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
@@ -428,7 +433,22 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     }
     return AppBar(
       title: Text(_isHost ? 'Share Screen' : 'Remote Control'),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: _disconnectAndGoBack,
+      ),
     );
+  }
+
+  void _disconnectAndGoBack() {
+    _capturer?.stop();
+    _capturer = null;
+    _webrtc?.dispose();
+    _webrtc = null;
+    _signaling?.dispose();
+    _signaling = null;
+    ref.read(screenProvider.notifier).stop();
+    context.go('/');
   }
 
   Widget _buildBody() {
@@ -460,50 +480,6 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       );
     }
 
-    // Not connected to signaling — show server URL input
-    if (_signalingState == SignalingState.disconnected) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  _isHost ? Icons.screen_share : Icons.settings_remote,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  _isHost ? 'Share Your Screen' : 'Remote Control',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _serverController,
-                  decoration: const InputDecoration(
-                    labelText: 'Signal Server URL',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.dns),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _connectSignaling,
-                  child: const Text('Connect'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
     // Connecting to signaling
     if (_signalingState == SignalingState.connecting) {
       return const Center(
@@ -513,6 +489,20 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             CircularProgressIndicator(),
             SizedBox(height: 16),
             Text('Connecting to server...'),
+          ],
+        ),
+      );
+    }
+
+    // Not connected to signaling — reconnecting
+    if (_signalingState == SignalingState.disconnected) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Reconnecting...'),
           ],
         ),
       );
@@ -665,5 +655,6 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       _errorMessage = null;
       _hasRemoteStream = false;
     });
+    _connectSignaling();
   }
 }
