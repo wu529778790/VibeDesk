@@ -174,6 +174,16 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
           _inputInjector = createInputInjector();
           channel.onMessage = _handleDataChannelMessage;
         },
+        onIceConnectionStateChange: (state) {
+          Logger.info('Host: ICE connection state: $state');
+          if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+              state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+            setState(() {
+              _connectionStatus = ConnectionStatus.failed;
+              _errorMessage = 'Connection lost';
+            });
+          }
+        },
       );
 
       await _webrtc!.initialize(iceServers: iceServers);
@@ -184,7 +194,9 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       await _webrtc!.addLocalStream(stream);
 
       // Create data channel for input events
-      await _webrtc!.createDataChannel('control');
+      final dc = await _webrtc!.createDataChannel('control');
+      _inputInjector = createInputInjector();
+      dc.onMessage = _handleDataChannelMessage;
 
       // Create and send offer
       final offer = await _webrtc!.createOffer();
@@ -237,6 +249,16 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         },
         onDataChannel: (channel) {
           Logger.info('Client: data channel received: ${channel.label}');
+        },
+        onIceConnectionStateChange: (state) {
+          Logger.info('Client: ICE connection state: $state');
+          if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
+              state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+            setState(() {
+              _connectionStatus = ConnectionStatus.failed;
+              _errorMessage = 'Connection lost';
+            });
+          }
         },
       );
 

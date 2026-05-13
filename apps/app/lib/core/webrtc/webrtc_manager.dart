@@ -9,11 +9,13 @@ class WebRTCManager {
   final void Function(MediaStream)? onRemoteStream;
   final void Function(RTCDataChannel)? onDataChannel;
   final void Function(RTCIceCandidate)? onIceCandidate;
+  final void Function(RTCIceConnectionState)? onIceConnectionStateChange;
 
   WebRTCManager({
     this.onRemoteStream,
     this.onDataChannel,
     this.onIceCandidate,
+    this.onIceConnectionStateChange,
   });
 
   Future<void> initialize({
@@ -36,6 +38,10 @@ class WebRTCManager {
     _pc!.onDataChannel = (channel) {
       _dataChannel = channel;
       onDataChannel?.call(_dataChannel!);
+    };
+
+    _pc!.onIceConnectionState = (state) {
+      onIceConnectionStateChange?.call(state);
     };
   }
 
