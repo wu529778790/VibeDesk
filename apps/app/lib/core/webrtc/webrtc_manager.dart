@@ -4,6 +4,8 @@ class WebRTCManager {
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   RTCDataChannel? _dataChannel;
+  bool _remoteDescriptionSet = false;
+  final List<RTCIceCandidate> _pendingCandidates = [];
   final void Function(MediaStream)? onRemoteStream;
   final void Function(RTCDataChannel)? onDataChannel;
   final void Function(RTCIceCandidate)? onIceCandidate;
@@ -54,10 +56,20 @@ class WebRTCManager {
 
   Future<void> setRemoteDescription(RTCSessionDescription desc) async {
     await _pc!.setRemoteDescription(desc);
+    _remoteDescriptionSet = true;
+    // Drain any candidates that arrived before the remote description
+    for (final c in _pendingCandidates) {
+      await _pc!.addCandidate(c);
+    }
+    _pendingCandidates.clear();
   }
 
   Future<void> addIceCandidate(RTCIceCandidate candidate) async {
-    await _pc!.addCandidate(candidate);
+    if (_remoteDescriptionSet) {
+      await _pc!.addCandidate(candidate);
+    } else {
+      _pendingCandidates.add(candidate);
+    }
   }
 
   Future<void> addLocalStream(MediaStream stream) async {

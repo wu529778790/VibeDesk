@@ -214,10 +214,10 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             'targetPeerId': 'host',
           });
         },
-        onRemoteStream: (stream) {
+        onRemoteStream: (stream) async {
           Logger.info('Client: remote stream received');
           final renderer = RTCVideoRenderer();
-          renderer.initialize();
+          await renderer.initialize();
           renderer.srcObject = stream;
           ref.read(screenProvider.notifier).setRemoteRenderer(renderer);
           setState(() {
