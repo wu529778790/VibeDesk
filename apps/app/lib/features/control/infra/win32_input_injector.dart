@@ -5,6 +5,22 @@ import '../domain/input_event.dart';
 import '../domain/input_injector.dart';
 
 class Win32InputInjector extends InputInjector {
+  int _screenWidth = 1920;
+  int _screenHeight = 1080;
+
+  @override
+  void setScreenSize(int width, int height) {
+    _screenWidth = width;
+    _screenHeight = height;
+  }
+
+  /// Convert pixel coordinates to Windows absolute coordinates (0-65535)
+  int _normalizeX(double x) =>
+      ((x / _screenWidth) * 65535).round().clamp(0, 65535);
+
+  int _normalizeY(double y) =>
+      ((y / _screenHeight) * 65535).round().clamp(0, 65535);
+
   VIRTUAL_KEY _getVirtualKeyCode(String key) {
     const keyMap = <String, VIRTUAL_KEY>{
       'Enter': VIRTUAL_KEY(0x0D),
@@ -20,7 +36,7 @@ class Win32InputInjector extends InputInjector {
       'Home': VIRTUAL_KEY(0x24),
       'End': VIRTUAL_KEY(0x23),
       'PageUp': VIRTUAL_KEY(0x21),
-      'PageDown': VIRTUAL_KEY(0x22),
+      'PagePageDown': VIRTUAL_KEY(0x22),
       'F1': VIRTUAL_KEY(0x70),
       'F2': VIRTUAL_KEY(0x71),
       'F3': VIRTUAL_KEY(0x72),
@@ -42,9 +58,10 @@ class Win32InputInjector extends InputInjector {
     final input = calloc<INPUT>();
     try {
       input.ref.type = INPUT_MOUSE;
-      input.ref.Anonymous.mi.dx = x;
-      input.ref.Anonymous.mi.dy = y;
-      input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE;
+      input.ref.Anonymous.mi.dx = _normalizeX(x.toDouble());
+      input.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
+      input.ref.Anonymous.mi.dwFlags =
+          MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
       SendInput(1, input, sizeOf<INPUT>());
     } finally {
       calloc.free(input);
@@ -56,19 +73,22 @@ class Win32InputInjector extends InputInjector {
     final input = calloc<INPUT>();
     try {
       input.ref.type = INPUT_MOUSE;
-      input.ref.Anonymous.mi.dx = x;
-      input.ref.Anonymous.mi.dy = y;
+      input.ref.Anonymous.mi.dx = _normalizeX(x.toDouble());
+      input.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
 
       switch (button) {
         case MouseButton.left:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_LEFTDOWN;
         case MouseButton.right:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_RIGHTDOWN;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_RIGHTDOWN;
         case MouseButton.middle:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_MIDDLEDOWN;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_MIDDLEDOWN;
       }
       SendInput(1, input, sizeOf<INPUT>());
     } finally {
@@ -81,19 +101,22 @@ class Win32InputInjector extends InputInjector {
     final input = calloc<INPUT>();
     try {
       input.ref.type = INPUT_MOUSE;
-      input.ref.Anonymous.mi.dx = x;
-      input.ref.Anonymous.mi.dy = y;
+      input.ref.Anonymous.mi.dx = _normalizeX(x.toDouble());
+      input.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
 
       switch (button) {
         case MouseButton.left:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_LEFTUP;
         case MouseButton.right:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_RIGHTUP;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_RIGHTUP;
         case MouseButton.middle:
-          input.ref.Anonymous.mi.dwFlags =
-              MOUSEEVENTF_MOVE | MOUSEEVENTF_MIDDLEUP;
+          input.ref.Anonymous.mi.dwFlags = MOUSEEVENTF_MOVE |
+              MOUSEEVENTF_ABSOLUTE |
+              MOUSEEVENTF_MIDDLEUP;
       }
       SendInput(1, input, sizeOf<INPUT>());
     } finally {
