@@ -31,12 +31,38 @@ Download the latest release for your platform from [Releases](https://github.com
 
 ## Quick Start
 
-### 1. Deploy Signal Server (Docker)
+### 1. Open the App
 
-The signal server is pre-built and available as a Docker image.
+Launch VibeDesk on both machines.
+
+### 2. Connect
+
+**Host (被控制端):**
+1. Select "Share Screen"
+2. Enter the signal server address (default: `ws://43.128.70.75:6666`)
+3. Click "Connect"
+4. Share the displayed room code with the client
+
+**Client (控制端):**
+1. Select "Remote Control"
+2. Enter the signal server address
+3. Click "Connect"
+4. Enter the room code from the host
+5. Click "Join Room"
+
+### 3. Control
+
+Once connected, you can:
+- **Click** to interact with the host screen
+- **Move mouse** to navigate
+- **Type** to send keyboard input
+- **Right-click** for context menus
+
+## Self-Hosted Signal Server
+
+VibeDesk uses a public signal server by default. For privacy or custom requirements, you can deploy your own:
 
 ```bash
-# Pull and run the latest image
 docker run -d -p 6666:6666 ghcr.io/wu529778790/vibedesk-signal-server:latest
 ```
 
@@ -52,63 +78,33 @@ services:
     restart: unless-stopped
 ```
 
-### 2. Connect
-
-**Host (被控制端):**
-1. Open VibeDesk
-2. Select "Share Screen"
-3. Enter the signal server address (default: `ws://your-server:6666`)
-4. Click "Connect"
-5. Share the displayed room code with the client
-
-**Client (控制端):**
-1. Open VibeDesk
-2. Select "Remote Control"
-3. Enter the signal server address
-4. Click "Connect"
-5. Enter the room code from the host
-6. Click "Join Room"
-
-### 3. Control
-
-Once connected, you can:
-- **Click** to interact with the host screen
-- **Move mouse** to navigate
-- **Type** to send keyboard input
-- **Right-click** for context menus
-
-## Configuration
-
-### Signal Server
-
-The signal server listens on port `6666` by default. To change:
-
-```bash
-docker run -d -p 8080:8080 ghcr.io/wu529778790/vibedesk-signal-server:latest
-```
-
-### ICE Servers
-
-By default, VibeDesk uses Google's public STUN server. For production or NAT traversal, configure a TURN server in the app settings.
-
-## Architecture
-
-- **Signal Server**: Handles room management and WebRTC signaling
-- **Host**: Captures screen, sends video via WebRTC, receives input events
-- **Client**: Displays remote screen, captures input, sends via DataChannel
-- **WebRTC P2P**: Direct peer-to-peer connection for video and input data
-- **Input Injection**: Platform-specific mouse/keyboard simulation (Win32, CGEvent)
-
-## Tech Stack
-
-- **Frontend**: Flutter Desktop (WebRTC, Riverpod)
-- **Backend**: Node.js + Fastify + WebSocket
-- **Protocol**: WebRTC (Video Stream + DataChannel)
-- **Input Injection**: Win32 API (Windows), CGEvent (macOS)
-
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for project roadmap and future plans.
+### v0.2.x - Stability & Bug Collection
+
+- [ ] Sentry integration (crash reporting + performance monitoring)
+- [ ] TURN server integration (NAT traversal)
+- [ ] Auto-reconnect mechanism
+- [ ] Connection quality indicator
+- [ ] Coordinate scaling
+- [ ] macOS input injection (CGEvent)
+
+### v0.3.x - Platform Expansion & Features
+
+- [ ] Windows ARM64 support
+- [ ] Linux input injection (xdotool/uinput)
+- [ ] File transfer
+- [ ] Clipboard sync (bidirectional)
+- [ ] Multi-monitor support
+- [ ] Session recording
+
+### v1.0+ - New Platforms & Enterprise
+
+- [ ] Android/iOS (host mode)
+- [ ] Web browser client
+- [ ] Password protection for rooms
+- [ ] Session audit logs
+- [ ] Role-based access control
 
 ## License
 
