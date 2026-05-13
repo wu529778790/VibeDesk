@@ -5,7 +5,8 @@ WORKDIR /workspace
 COPY packages/protocol/package.json packages/protocol/package-lock.json ./packages/protocol/
 COPY packages/protocol/tsconfig.json ./packages/protocol/
 COPY packages/protocol/src/ ./packages/protocol/src/
-RUN cd packages/protocol && npm install && npm run build
+RUN cd packages/protocol && npm install && npm run build \
+    && sed -i 's|"main": "./src/index.ts"|"main": "./dist/index.js"|' package.json
 
 # Copy and build signal server
 COPY apps/signal-server/package.json apps/signal-server/package-lock.json ./apps/signal-server/
