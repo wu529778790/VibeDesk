@@ -104,6 +104,10 @@ docker run -d -p 8080:8080 ghcr.io/wu529778790/vibedesk-signal-server:latest
 - **协议**：WebRTC（视频流 + DataChannel）
 - **输入注入**：Win32 API（Windows）、CGEvent（macOS）
 
+## 项目规划
+
+查看 [ROADMAP.md](ROADMAP.md) 了解项目路线图和未来计划。
+
 ## 许可证
 
 MIT

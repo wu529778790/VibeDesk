@@ -106,6 +106,10 @@ By default, VibeDesk uses Google's public STUN server. For production or NAT tra
 - **Protocol**: WebRTC (Video Stream + DataChannel)
 - **Input Injection**: Win32 API (Windows), CGEvent (macOS)
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for project roadmap and future plans.
+
 ## License
 
 MIT
