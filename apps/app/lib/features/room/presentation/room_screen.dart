@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:ffi';
 import 'dart:io' show Platform;
+import 'dart:ffi' as ffi;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -48,6 +48,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   // Host screen size (used by client for coordinate scaling)
   int _hostScreenWidth = 1920;
   int _hostScreenHeight = 1080;
+  Size _widgetSize = Size.zero;
 
   bool get _isHost => widget.role == UserRole.host;
 
@@ -75,9 +76,9 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     if (!Platform.isWindows) return (1920, 1080);
     try {
       // Use dart:ffi to call GetSystemMetrics
-      final user32 = DynamicLibrary.open('user32.dll');
+      final user32 = ffi.DynamicLibrary.open('user32.dll');
       final getSystemMetrics = user32.lookupFunction<
-          Int32 Function(Int32),
+          ffi.Int32 Function(ffi.Int32),
           int Function(int)>('GetSystemMetrics');
       // SM_CXSCREEN = 0, SM_CYSCREEN = 1
       final width = getSystemMetrics(0);
@@ -411,42 +412,58 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   }
 
   /// Scale widget-local coordinates to host screen coordinates.
-  /// Uses the video renderer's actual size as the source coordinate space.
+  /// Accounts for objectFit=contain letterboxing.
   (double, double) _scaleCoordinates(double widgetX, double widgetY) {
     final renderer = ref.read(screenProvider);
-    if (renderer == null) return (widgetX, widgetY);
+    if (renderer == null || _widgetSize == Size.zero) {
+      return (widgetX, widgetY);
+    }
 
-    // Get the actual video frame size from the renderer
     final videoWidth = renderer.videoWidth.toDouble();
     final videoHeight = renderer.videoHeight.toDouble();
     if (videoWidth <= 0 || videoHeight <= 0) return (widgetX, widgetY);
 
-    // Scale: widget coords → video coords → host screen coords
-    // Step 1: widgetX/Y is relative to the widget size
-    // Step 2: map to video pixel coordinates
-    // Step 3: map to host screen coordinates
-    //
-    // Since RTCVideoView uses objectFit=contain, the video is centered
-    // with possible letterboxing. We need to account for that.
-    //
-    // For simplicity, assume the widget fills with the video's aspect ratio
-    // (contain mode). The actual rendered video area within the widget
-    // maintains the aspect ratio.
-    //
-    // The widget size is the ControlOverlay size. The video is rendered
-    // inside it with objectFit=contain. We need the actual widget size
-    // to compute the mapping. But we don't have direct access here.
-    //
-    // Simplified approach: the video frame maps linearly to the host screen.
-    // widgetX/widgetY are in widget coordinates. We assume the widget
-    // closely matches the video aspect ratio (Flutter's RTCVideoView with
-    // contain fills as much as possible).
-    //
-    // Direct mapping: widget coords → host screen coords
-    final hostX = (widgetX / videoWidth * _hostScreenWidth).round();
-    final hostY = (widgetY / videoHeight * _hostScreenHeight).round();
+    final widgetW = _widgetSize.width;
+    final widgetH = _widgetSize.height;
 
-    return (hostX.toDouble(), hostY.toDouble());
+    // Calculate the actual rendered video area within the widget (contain mode)
+    final videoAspect = videoWidth / videoHeight;
+    final widgetAspect = widgetW / widgetH;
+
+    double renderW, renderH, offsetX, offsetY;
+    if (videoAspect > widgetAspect) {
+      // Video is wider than widget → width fits, height has letterboxing
+      renderW = widgetW;
+      renderH = widgetW / videoAspect;
+      offsetX = 0;
+      offsetY = (widgetH - renderH) / 2;
+    } else {
+      // Video is taller than widget → height fits, width has pillarboxing
+      renderH = widgetH;
+      renderW = widgetH * videoAspect;
+      offsetX = (widgetW - renderW) / 2;
+      offsetY = 0;
+    }
+
+    // Check if click is outside the video area (in letterbox/pillarbox zone)
+    if (widgetX < offsetX ||
+        widgetX > offsetX + renderW ||
+        widgetY < offsetY ||
+        widgetY > offsetY + renderH) {
+      // Click is in the black area, map to nearest video edge
+      widgetX = widgetX.clamp(offsetX, offsetX + renderW);
+      widgetY = widgetY.clamp(offsetY, offsetY + renderH);
+    }
+
+    // Map from widget coords → video pixel coords (0..videoWidth, 0..videoHeight)
+    final videoX = (widgetX - offsetX) / renderW * videoWidth;
+    final videoY = (widgetY - offsetY) / renderH * videoHeight;
+
+    // Map from video pixel coords → host screen coords
+    final hostX = videoX / videoWidth * _hostScreenWidth;
+    final hostY = videoY / videoHeight * _hostScreenHeight;
+
+    return (hostX, hostY);
   }
 
   void _handleDataChannelMessage(RTCDataChannelMessage message) {
@@ -745,6 +762,11 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         child: ControlOverlay(
           renderer: renderer,
           onInputEvent: _sendInputEvent,
+          onSizeChanged: (size) {
+            if (_widgetSize != size) {
+              setState(() => _widgetSize = size);
+            }
+          },
         ),
       );
     }

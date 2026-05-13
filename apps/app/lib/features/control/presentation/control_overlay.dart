@@ -6,11 +6,13 @@ import '../domain/input_event.dart' as input;
 class ControlOverlay extends StatefulWidget {
   final RTCVideoRenderer renderer;
   final void Function(input.InputEvent) onInputEvent;
+  final void Function(Size widgetSize)? onSizeChanged;
 
   const ControlOverlay({
     super.key,
     required this.renderer,
     required this.onInputEvent,
+    this.onSizeChanged,
   });
 
   @override
@@ -35,48 +37,58 @@ class _ControlOverlayState extends State<ControlOverlay> {
     return KeyboardListener(
       focusNode: _focusNode,
       onKeyEvent: _handleKeyEvent,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) {
-          _lastPosition = details.localPosition;
-          widget.onInputEvent(input.MouseMoveEvent(
-            details.localPosition.dx,
-            details.localPosition.dy,
-          ));
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final widgetSize = Size(constraints.maxWidth, constraints.maxHeight);
+          // Notify parent of size changes
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onSizeChanged?.call(widgetSize);
+          });
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onPanUpdate: (details) {
+              _lastPosition = details.localPosition;
+              widget.onInputEvent(input.MouseMoveEvent(
+                details.localPosition.dx,
+                details.localPosition.dy,
+              ));
+            },
+            onPanDown: (details) {
+              _lastPosition = details.localPosition;
+              widget.onInputEvent(input.MouseDownEvent(
+                details.localPosition.dx,
+                details.localPosition.dy,
+                input.MouseButton.left,
+              ));
+            },
+            onPanEnd: (_) {
+              widget.onInputEvent(input.MouseUpEvent(
+                _lastPosition.dx,
+                _lastPosition.dy,
+                input.MouseButton.left,
+              ));
+            },
+            onSecondaryTapDown: (details) {
+              widget.onInputEvent(input.MouseDownEvent(
+                details.localPosition.dx,
+                details.localPosition.dy,
+                input.MouseButton.right,
+              ));
+            },
+            onSecondaryTapUp: (details) {
+              widget.onInputEvent(input.MouseUpEvent(
+                details.localPosition.dx,
+                details.localPosition.dy,
+                input.MouseButton.right,
+              ));
+            },
+            child: RTCVideoView(
+              widget.renderer,
+              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+            ),
+          );
         },
-        onPanDown: (details) {
-          _lastPosition = details.localPosition;
-          widget.onInputEvent(input.MouseDownEvent(
-            details.localPosition.dx,
-            details.localPosition.dy,
-            input.MouseButton.left,
-          ));
-        },
-        onPanEnd: (_) {
-          widget.onInputEvent(input.MouseUpEvent(
-            _lastPosition.dx,
-            _lastPosition.dy,
-            input.MouseButton.left,
-          ));
-        },
-        onSecondaryTapDown: (details) {
-          widget.onInputEvent(input.MouseDownEvent(
-            details.localPosition.dx,
-            details.localPosition.dy,
-            input.MouseButton.right,
-          ));
-        },
-        onSecondaryTapUp: (details) {
-          widget.onInputEvent(input.MouseUpEvent(
-            details.localPosition.dx,
-            details.localPosition.dy,
-            input.MouseButton.right,
-          ));
-        },
-        child: RTCVideoView(
-          widget.renderer,
-          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
-        ),
       ),
     );
   }
