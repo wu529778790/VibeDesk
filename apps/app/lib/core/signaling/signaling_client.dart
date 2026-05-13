@@ -35,33 +35,29 @@ class SignalingClient {
   void connect(String url) {
     _state = SignalingState.connecting;
     onStateChanged(_state);
-    bool wasConnected = false;
     _channel = WebSocketChannel.connect(Uri.parse(url));
+
+    // Wait for connection to establish
+    _channel!.ready.then((_) {
+      _state = SignalingState.connected;
+      onStateChanged(_state);
+    }).catchError((error) {
+      _state = SignalingState.error;
+      onStateChanged(_state);
+      onError?.call('Connection failed: $error');
+    });
+
     _channel!.stream.listen(
       (event) {
-        if (_state != SignalingState.connected) {
-          _state = SignalingState.connected;
-          wasConnected = true;
-          onStateChanged(_state);
-        }
         final json = jsonDecode(event as String) as Map<String, dynamic>;
         onMessage(SignalingMessage.fromJson(json));
       },
       onError: (error) {
-        if (!wasConnected) {
-          _state = SignalingState.error;
-          onStateChanged(_state);
-          onError?.call('Connection failed: $error');
-        } else {
-          _disconnect();
-        }
+        _disconnect();
+        onError?.call('Connection error: $error');
       },
       onDone: () {
-        if (!wasConnected) {
-          _state = SignalingState.error;
-          onStateChanged(_state);
-          onError?.call('Connection refused. Is the signal server running?');
-        } else {
+        if (_state == SignalingState.connected) {
           _disconnect();
         }
       },
