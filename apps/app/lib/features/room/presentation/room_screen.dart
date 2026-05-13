@@ -23,7 +23,7 @@ class RoomScreen extends ConsumerStatefulWidget {
 
 class _RoomScreenState extends ConsumerState<RoomScreen> {
   // Controllers
-  final _serverController = TextEditingController(text: 'ws://localhost:3000');
+  final _serverController = TextEditingController(text: 'ws://43.128.70.75:6666');
   final _roomIdController = TextEditingController();
 
   // Core instances owned by this widget
