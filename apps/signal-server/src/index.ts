@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { WebSocketServer } from "ws";
 import { config } from "./config.js";
-import { handleConnection } from "./ws/connection.js";
+import { handleConnection, rooms } from "./ws/connection.js";
 
 const fastify = Fastify({ logger: true });
 
@@ -18,7 +18,7 @@ wss.on("connection", (ws) => {
 });
 
 fastify.get("/health", async () => {
-  return { status: "ok", rooms: 0 };
+  return { status: "ok", rooms: rooms.roomCount() };
 });
 
 async function start() {

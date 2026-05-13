@@ -1,7 +1,34 @@
 import type { WebSocket } from "ws";
+import { RoomManager } from "./rooms.js";
+import { handleRoomMessage } from "../handlers/room.js";
+import { handleSignalingMessage } from "../handlers/signaling.js";
+
+const rooms = new RoomManager();
 
 export function handleConnection(ws: WebSocket): void {
   ws.on("message", (raw) => {
-    ws.send(JSON.stringify({ type: "error", message: "Not implemented" }));
+    let data: unknown;
+    try {
+      data = JSON.parse(raw.toString());
+    } catch {
+      ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
+      return;
+    }
+
+    if (!handleRoomMessage(ws, data, rooms)) {
+      handleSignalingMessage(ws, data, rooms);
+    }
+  });
+
+  ws.on("close", () => {
+    const roomId = rooms.removeByWs(ws);
+    if (roomId) {
+      const peer = rooms.getPeer(ws);
+      if (peer) {
+        peer.send(JSON.stringify({ type: "peer_left", peerId: "peer" }));
+      }
+    }
   });
 }
+
+export { rooms };
