@@ -71,6 +71,12 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
           });
         }
       },
+      onError: (msg) {
+        setState(() {
+          _connectionStatus = ConnectionStatus.failed;
+          _errorMessage = msg;
+        });
+      },
     );
 
     _signaling!.connect(url);

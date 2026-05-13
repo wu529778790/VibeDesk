@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-enum SignalingState { disconnected, connecting, connected }
+enum SignalingState { disconnected, connecting, connected, error }
 
 class SignalingMessage {
   final String type;
@@ -22,10 +22,12 @@ class SignalingClient {
   SignalingState _state = SignalingState.disconnected;
   final void Function(SignalingMessage) onMessage;
   final void Function(SignalingState) onStateChanged;
+  final void Function(String)? onError;
 
   SignalingClient({
     required this.onMessage,
     required this.onStateChanged,
+    this.onError,
   });
 
   SignalingState get state => _state;
@@ -33,18 +35,36 @@ class SignalingClient {
   void connect(String url) {
     _state = SignalingState.connecting;
     onStateChanged(_state);
+    bool wasConnected = false;
     _channel = WebSocketChannel.connect(Uri.parse(url));
     _channel!.stream.listen(
       (event) {
         if (_state != SignalingState.connected) {
           _state = SignalingState.connected;
+          wasConnected = true;
           onStateChanged(_state);
         }
         final json = jsonDecode(event as String) as Map<String, dynamic>;
         onMessage(SignalingMessage.fromJson(json));
       },
-      onError: (_) => _disconnect(),
-      onDone: () => _disconnect(),
+      onError: (error) {
+        if (!wasConnected) {
+          _state = SignalingState.error;
+          onStateChanged(_state);
+          onError?.call('Connection failed: $error');
+        } else {
+          _disconnect();
+        }
+      },
+      onDone: () {
+        if (!wasConnected) {
+          _state = SignalingState.error;
+          onStateChanged(_state);
+          onError?.call('Connection refused. Is the signal server running?');
+        } else {
+          _disconnect();
+        }
+      },
     );
   }
 
