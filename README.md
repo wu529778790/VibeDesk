@@ -2,6 +2,8 @@
 
 WebRTC-based remote desktop control system. Share your screen and allow remote control from another machine.
 
+[中文文档](README.zh.md)
+
 ![VibeDesk Architecture](docs/diagrams/architecture.svg)
 
 ## Features
