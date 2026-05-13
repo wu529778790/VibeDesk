@@ -21,12 +21,10 @@ export function handleConnection(ws: WebSocket): void {
   });
 
   ws.on("close", () => {
+    const peer = rooms.getPeer(ws);
     const roomId = rooms.removeByWs(ws);
-    if (roomId) {
-      const peer = rooms.getPeer(ws);
-      if (peer) {
-        peer.send(JSON.stringify({ type: "peer_left", peerId: "peer" }));
-      }
+    if (roomId && peer) {
+      peer.send(JSON.stringify({ type: "peer_left", peerId: "peer" }));
     }
   });
 }
