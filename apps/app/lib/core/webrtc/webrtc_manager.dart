@@ -1,11 +1,11 @@
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'ice_candidate_buffer.dart';
 
 class WebRTCManager {
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   RTCDataChannel? _dataChannel;
-  bool _remoteDescriptionSet = false;
-  final List<RTCIceCandidate> _pendingCandidates = [];
+  final _iceBuffer = IceCandidateBuffer();
   final void Function(MediaStream)? onRemoteStream;
   final void Function(RTCDataChannel)? onDataChannel;
   final void Function(RTCIceCandidate)? onIceCandidate;
@@ -56,19 +56,15 @@ class WebRTCManager {
 
   Future<void> setRemoteDescription(RTCSessionDescription desc) async {
     await _pc!.setRemoteDescription(desc);
-    _remoteDescriptionSet = true;
     // Drain any candidates that arrived before the remote description
-    for (final c in _pendingCandidates) {
+    for (final c in _iceBuffer.drain()) {
       await _pc!.addCandidate(c);
     }
-    _pendingCandidates.clear();
   }
 
   Future<void> addIceCandidate(RTCIceCandidate candidate) async {
-    if (_remoteDescriptionSet) {
+    if (!_iceBuffer.add(candidate)) {
       await _pc!.addCandidate(candidate);
-    } else {
-      _pendingCandidates.add(candidate);
     }
   }
 
