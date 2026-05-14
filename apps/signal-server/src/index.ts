@@ -9,12 +9,22 @@ const wss = new WebSocketServer({ noServer: true });
 
 // Heartbeat: ping every 30s, terminate unresponsive clients after 2 missed pings
 const heartbeatInterval = setInterval(() => {
+  let alive = 0;
+  let dead = 0;
   wss.clients.forEach((ws) => {
     const ext = ws as WebSocket & { isAlive?: boolean };
-    if (!ext.isAlive) return ws.terminate();
+    if (!ext.isAlive) {
+      dead++;
+      console.log(`[heartbeat] terminating unresponsive client`);
+      return ws.terminate();
+    }
     ext.isAlive = false;
     ws.ping();
+    alive++;
   });
+  if (alive + dead > 0) {
+    console.log(`[heartbeat] ${alive} alive, ${dead} terminated`);
+  }
 }, 30_000);
 
 wss.on("close", () => clearInterval(heartbeatInterval));
