@@ -767,10 +767,6 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
               setState(() => _widgetSize = size);
             }
           },
-          onConnectionLost: () {
-            // Connection lost while controlling — handled by ICE state change
-            // which already sets _connectionStatus and _errorMessage
-          },
         ),
       );
     }
