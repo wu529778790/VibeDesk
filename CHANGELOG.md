@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.3] - 2025-05-14
+
+### Changed
+- App auto-connects on launch — no server URL page, goes directly to role selection
+- Server URL only configurable in Settings, no longer exposed in main flow
+- Client remote desktop now fullscreen (no AppBar), maximizing screen space
+- First launch redirects to Settings to configure server URL
+
+### Removed
+- Server URL connection page (SetupScreen)
+- Loading/connecting intermediate screens
+
 ## [0.1.2] - 2025-05-14
 
 ### Changed
