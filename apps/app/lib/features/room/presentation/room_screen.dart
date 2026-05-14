@@ -543,9 +543,60 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Client with remote stream: fullscreen, no AppBar
+    if (!_isHost && _hasRemoteStream) {
+      return _buildClientFullscreen();
+    }
+
     return Scaffold(
       appBar: _buildAppBar(),
       body: _buildBody(),
+    );
+  }
+
+  Widget _buildClientFullscreen() {
+    final renderer = ref.watch(screenProvider);
+    if (renderer == null) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        Container(
+          color: Colors.black,
+          child: ControlOverlay(
+            renderer: renderer,
+            onInputEvent: _sendInputEvent,
+            onSizeChanged: (size) {
+              if (_widgetSize != size) {
+                setState(() => _widgetSize = size);
+              }
+            },
+          ),
+        ),
+        // Floating disconnect button (top-right, semi-transparent)
+        Positioned(
+          top: 8,
+          right: 8,
+          child: MouseRegion(
+            child: Material(
+              color: Colors.transparent,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70, size: 28),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black45,
+                ),
+                onPressed: _disconnectAndGoBack,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -742,33 +793,9 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       );
     }
 
-    // Client: showing remote stream with control overlay
+    // Client: showing remote stream — handled by build() fullscreen
     if (!_isHost && _hasRemoteStream) {
-      final renderer = ref.watch(screenProvider);
-      if (renderer == null) {
-        return const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Waiting for stream...'),
-            ],
-          ),
-        );
-      }
-      return Container(
-        color: Colors.black,
-        child: ControlOverlay(
-          renderer: renderer,
-          onInputEvent: _sendInputEvent,
-          onSizeChanged: (size) {
-            if (_widgetSize != size) {
-              setState(() => _widgetSize = size);
-            }
-          },
-        ),
-      );
+      return const SizedBox.shrink();
     }
 
     return const Center(child: Text('Unexpected state'));
