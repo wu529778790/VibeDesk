@@ -28,9 +28,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.dispose();
   }
 
+  void _saveAndReconnect() {
+    final url = _serverController.text.trim();
+    if (url.isEmpty) return;
+
+    ref.read(signalServerProvider.notifier).setUrl(url);
+    ref.read(signalConnectionProvider.notifier).connect(url);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Saved and connecting...')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(iceConfigProvider);
+    final connStatus = ref.watch(signalConnectionProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -53,19 +65,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          if (connStatus.status == SignalConnectionStatus.connected)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, size: 16, color: Colors.green.shade400),
+                  const SizedBox(width: 6),
+                  Text('Connected', style: TextStyle(color: Colors.green.shade400, fontSize: 13)),
+                ],
+              ),
+            )
+          else if (connStatus.status == SignalConnectionStatus.failed)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.error, size: 16, color: Theme.of(context).colorScheme.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      connStatus.error ?? 'Connection failed',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (connStatus.status == SignalConnectionStatus.connecting)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 6),
+                  Text('Connecting...', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                ],
+              ),
+            ),
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () {
-                final url = _serverController.text.trim();
-                if (url.isNotEmpty) {
-                  ref.read(signalServerProvider.notifier).setUrl(url);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Server URL saved')),
-                  );
-                }
-              },
-              child: const Text('Save'),
+              onPressed: _saveAndReconnect,
+              child: const Text('Save & Connect'),
             ),
           ),
           const SizedBox(height: 32),
