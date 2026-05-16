@@ -48,7 +48,7 @@ class WebRTCManager {
   Future<RTCSessionDescription> createOffer() async {
     final desc = await _pc!.createOffer({
       'offerToReceiveVideo': true,
-      'offerToReceiveAudio': false,
+      'offerToReceiveAudio': true,
     });
     await _pc!.setLocalDescription(desc);
     return desc;

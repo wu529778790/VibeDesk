@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/platform/auto_launch_service.dart';
 import '../../../core/signaling/signal_server_provider.dart';
 import '../domain/ice_config.dart';
 
@@ -14,12 +17,14 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _serverController;
+  bool _autoLaunch = false;
 
   @override
   void initState() {
     super.initState();
     final url = ref.read(signalServerProvider).valueOrNull ?? '';
     _serverController = TextEditingController(text: url);
+    _autoLaunch = AutoLaunchService.isEnabled;
   }
 
   @override
@@ -112,6 +117,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 32),
+
+          // Auto Launch
+          if (Platform.isMacOS || Platform.isWindows) ...[
+            const Text(
+              'General',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              title: const Text('Launch at startup'),
+              subtitle: const Text('Start VibeDesk when you log in'),
+              value: _autoLaunch,
+              onChanged: (value) async {
+                if (value) {
+                  await AutoLaunchService.enable();
+                } else {
+                  await AutoLaunchService.disable();
+                }
+                setState(() => _autoLaunch = AutoLaunchService.isEnabled);
+              },
+            ),
+            const SizedBox(height: 32),
+          ],
 
           // ICE Servers
           const Text(

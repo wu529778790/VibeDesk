@@ -17,7 +17,7 @@ class ScreenCapturer {
       }
 
       _stream = await navigator.mediaDevices.getDisplayMedia({
-        'audio': false,
+        'audio': true,
         'video': {
           'deviceId': {'exact': sources.first.id},
           'mandatory': {
@@ -29,7 +29,7 @@ class ScreenCapturer {
       });
     } else {
       _stream = await navigator.mediaDevices.getDisplayMedia({
-        'audio': false,
+        'audio': true,
         'video': {
           'mandatory': {
             'maxWidth': 1920,
