@@ -23,6 +23,7 @@ import '../../control/infra/input_injector_factory.dart';
 import '../../control/presentation/control_overlay.dart';
 import '../../screen/presentation/screen_provider.dart';
 import '../../../shared/widgets/connection_status.dart';
+import '../../../core/webrtc/connection_quality_provider.dart';
 
 class RoomScreen extends ConsumerStatefulWidget {
   final UserRole role;
@@ -85,19 +86,38 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   // ---------------------------------------------------------------------------
 
   (int, int) _getWin32ScreenSize() {
-    if (!Platform.isWindows) return (1920, 1080);
-    try {
-      // Use dart:ffi to call GetSystemMetrics
-      final user32 = ffi.DynamicLibrary.open('user32.dll');
-      final getSystemMetrics = user32.lookupFunction<
-          ffi.Int32 Function(ffi.Int32),
-          int Function(int)>('GetSystemMetrics');
-      // SM_CXSCREEN = 0, SM_CYSCREEN = 1
-      final width = getSystemMetrics(0);
-      final height = getSystemMetrics(1);
-      if (width > 0 && height > 0) return (width, height);
-    } catch (e) {
-      Logger.error('Failed to get screen size via Win32', e);
+    if (Platform.isWindows) {
+      try {
+        final user32 = ffi.DynamicLibrary.open('user32.dll');
+        final getSystemMetrics = user32.lookupFunction<
+            ffi.Int32 Function(ffi.Int32),
+            int Function(int)>('GetSystemMetrics');
+        final width = getSystemMetrics(0);
+        final height = getSystemMetrics(1);
+        if (width > 0 && height > 0) return (width, height);
+      } catch (e) {
+        Logger.error('Failed to get screen size via Win32', e);
+      }
+    } else if (Platform.isMacOS) {
+      try {
+        final coreGraphics = ffi.DynamicLibrary.open(
+            '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics');
+        final cgMainDisplayID = coreGraphics.lookupFunction<
+            ffi.Uint32 Function(),
+            int Function()>('CGMainDisplayID');
+        final cgDisplayPixelsWide = coreGraphics.lookupFunction<
+            ffi.Int32 Function(ffi.Uint32),
+            int Function(int)>('CGDisplayPixelsWide');
+        final cgDisplayPixelsHigh = coreGraphics.lookupFunction<
+            ffi.Int32 Function(ffi.Uint32),
+            int Function(int)>('CGDisplayPixelsHigh');
+        final displayId = cgMainDisplayID();
+        final width = cgDisplayPixelsWide(displayId);
+        final height = cgDisplayPixelsHigh(displayId);
+        if (width > 0 && height > 0) return (width, height);
+      } catch (e) {
+        Logger.error('Failed to get screen size via CoreGraphics', e);
+      }
     }
     return (1920, 1080);
   }
@@ -244,15 +264,22 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       Logger.info('Host screen size: ${screenW}x$screenH');
 
       // Send screen size to client when channel is ready
-      Future.delayed(const Duration(seconds: 1), () {
-        if (dc.state == RTCDataChannelState.RTCDataChannelOpen) {
-          dc.send(RTCDataChannelMessage(jsonEncode({
-            'type': 'screen_size',
-            'width': screenW,
-            'height': screenH,
-          })));
+      void sendScreenSize() {
+        dc.send(RTCDataChannelMessage(jsonEncode({
+          'type': 'screen_size',
+          'width': screenW,
+          'height': screenH,
+        })));
+      }
+
+      if (dc.state == RTCDataChannelState.RTCDataChannelOpen) {
+        sendScreenSize();
+      }
+      dc.onDataChannelState = (state) {
+        if (state == RTCDataChannelState.RTCDataChannelOpen) {
+          sendScreenSize();
         }
-      });
+      };
 
       dc.onMessage = _handleDataChannelMessage;
 
@@ -317,6 +344,11 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
           await renderer.initialize();
           renderer.srcObject = stream;
           ref.read(screenProvider.notifier).setRemoteRenderer(renderer);
+          // Attach connection quality monitor
+          final pc = _webrtc?.peerConnection;
+          if (pc != null) {
+            ref.read(connectionQualityProvider.notifier).attach(pc);
+          }
           setState(() {
             _hasRemoteStream = true;
             _connectionStatus = ConnectionStatus.connected;
@@ -382,6 +414,11 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       await _webrtc?.setRemoteDescription(
         RTCSessionDescription(sdp, 'answer'),
       );
+      // Attach connection quality monitor
+      final pc = _webrtc?.peerConnection;
+      if (pc != null) {
+        ref.read(connectionQualityProvider.notifier).attach(pc);
+      }
       setState(() {
         _connectionStatus = ConnectionStatus.connected;
       });
@@ -622,6 +659,12 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             },
           ),
         ),
+        // Connection quality indicator (top-left)
+        Positioned(
+          top: 8,
+          left: 8,
+          child: _buildQualityIndicator(),
+        ),
         // Floating disconnect button (top-right, semi-transparent)
         Positioned(
           top: 8,
@@ -668,7 +711,51 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     );
   }
 
+  Widget _buildQualityIndicator() {
+    final stats = ref.watch(connectionQualityProvider);
+    final color = switch (stats.quality) {
+      ConnectionQuality.excellent => Colors.green,
+      ConnectionQuality.good => Colors.orange,
+      ConnectionQuality.poor => Colors.red,
+      ConnectionQuality.disconnected => Colors.grey,
+    };
+    final label = switch (stats.quality) {
+      ConnectionQuality.excellent => 'Excellent',
+      ConnectionQuality.good => 'Good',
+      ConnectionQuality.poor => 'Poor',
+      ConnectionQuality.disconnected => '...',
+    };
+    return MouseRegion(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black45,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              stats.rttMs > 0 ? '${stats.rttMs}ms' : label,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _disconnectAndGoBack() {
+    ref.read(connectionQualityProvider.notifier).stop();
     _audioSubscription?.cancel();
     _audioSubscription = null;
     _audioCapturer?.stop();
@@ -853,6 +940,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   }
 
   void _reset() {
+    ref.read(connectionQualityProvider.notifier).stop();
     _capturer?.stop();
     _capturer = null;
     _webrtc?.dispose();

@@ -1,13 +1,16 @@
 import 'dart:io';
 import '../domain/input_injector.dart';
 import '../domain/input_event.dart';
+import 'macos_input_injector.dart';
 import 'win32_input_injector.dart';
 
 InputInjector createPlatformInputInjector() {
   if (Platform.isWindows) {
     return Win32InputInjector();
   }
-  // macOS/Linux: input injection not yet supported, return no-op stub
+  if (Platform.isMacOS) {
+    return MacOSInputInjector();
+  }
   return _NoOpInputInjector();
 }
 

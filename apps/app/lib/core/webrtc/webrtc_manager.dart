@@ -53,11 +53,15 @@ class WebRTCManager {
     };
   }
 
-  Future<RTCSessionDescription> createOffer() async {
-    final desc = await _pc!.createOffer({
+  Future<RTCSessionDescription> createOffer({bool iceRestart = false}) async {
+    final constraints = <String, dynamic>{
       'offerToReceiveVideo': true,
       'offerToReceiveAudio': true,
-    });
+    };
+    if (iceRestart) {
+      constraints['iceRestart'] = true;
+    }
+    final desc = await _pc!.createOffer(constraints);
     await _pc!.setLocalDescription(desc);
     return desc;
   }
@@ -103,6 +107,7 @@ class WebRTCManager {
 
   RTCDataChannel? get dataChannel => _dataChannel;
   RTCDataChannel? get audioChannel => _audioChannel;
+  RTCPeerConnection? get peerConnection => _pc;
 
   void dispose() {
     _audioChannel?.close();

@@ -28,6 +28,7 @@ class IceServer {
 class IceConfig {
   static const defaultServers = [
     IceServer(urls: 'stun:stun.l.google.com:19302'),
+    IceServer(urls: 'stun:stun1.l.google.com:19302'),
   ];
 
   final List<IceServer> servers;

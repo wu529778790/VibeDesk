@@ -21,6 +21,7 @@ dependencies:
   ffi: ^2.1.0
   win32: ^6.0.0
   shared_preferences: ^2.5.0
+  sentry_flutter: ^8.0.0
 
 dev_dependencies:
   flutter_test:
