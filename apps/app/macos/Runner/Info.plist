@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>VibeDesk needs screen recording permission to share your screen with remote clients.</string>
 </dict>
 </plist>
