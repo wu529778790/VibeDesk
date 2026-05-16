@@ -49,6 +49,23 @@ class MouseUpEvent extends InputEvent {
       };
 }
 
+class MouseWheelEvent extends InputEvent {
+  final double x;
+  final double y;
+  final int deltaX;
+  final int deltaY;
+  MouseWheelEvent(this.x, this.y, this.deltaX, this.deltaY);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'mouse_wheel',
+        'x': x.round(),
+        'y': y.round(),
+        'deltaX': deltaX,
+        'deltaY': deltaY,
+      };
+}
+
 class KeyDownEvent extends InputEvent {
   final String key;
   final List<ModifierKey> modifiers;

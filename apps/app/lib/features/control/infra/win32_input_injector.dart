@@ -125,6 +125,47 @@ class Win32InputInjector extends InputInjector {
   }
 
   @override
+  Future<void> mouseWheel(int x, int y, int deltaX, int deltaY) async {
+    // Move to position first
+    await mouseMove(x, y);
+
+    // Vertical scroll
+    if (deltaY != 0) {
+      final inp = calloc<INPUT>();
+      try {
+        inp.ref.type = INPUT_MOUSE;
+        inp.ref.Anonymous.mi.dx = _normalizeX(x.toDouble());
+        inp.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
+        inp.ref.Anonymous.mi.dwFlags =
+            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_WHEEL;
+        // WHEEL_DELTA = 120, scroll amount is in multiples of WHEEL_DELTA
+        inp.ref.Anonymous.mi.mouseData =
+            (-deltaY).clamp(-1200, 1200);
+        SendInput(1, inp, sizeOf<INPUT>());
+      } finally {
+        calloc.free(inp);
+      }
+    }
+
+    // Horizontal scroll
+    if (deltaX != 0) {
+      final inp = calloc<INPUT>();
+      try {
+        inp.ref.type = INPUT_MOUSE;
+        inp.ref.Anonymous.mi.dx = _normalizeX(x.toDouble());
+        inp.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
+        inp.ref.Anonymous.mi.dwFlags =
+            MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_HWHEEL;
+        inp.ref.Anonymous.mi.mouseData =
+            (-deltaX).clamp(-1200, 1200);
+        SendInput(1, inp, sizeOf<INPUT>());
+      } finally {
+        calloc.free(inp);
+      }
+    }
+  }
+
+  @override
   Future<void> keyDown(String key, List<ModifierKey> modifiers) async {
     final vk = _getVirtualKeyCode(key);
     const flags = KEYBD_EVENT_FLAGS(0);

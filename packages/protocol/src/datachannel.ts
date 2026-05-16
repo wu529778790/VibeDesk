@@ -25,6 +25,15 @@ export const MouseUpMessageSchema = z.object({
 });
 export type MouseUpMessage = z.infer<typeof MouseUpMessageSchema>;
 
+export const MouseWheelMessageSchema = z.object({
+  type: z.literal("mouse_wheel"),
+  x: z.number(),
+  y: z.number(),
+  deltaX: z.number(),
+  deltaY: z.number(),
+});
+export type MouseWheelMessage = z.infer<typeof MouseWheelMessageSchema>;
+
 // --- Keyboard control (Client → Host) ---
 
 export const KeyDownMessageSchema = z.object({
@@ -82,6 +91,7 @@ export const DataChannelMessageSchema = z.discriminatedUnion("type", [
   MouseMoveMessageSchema,
   MouseDownMessageSchema,
   MouseUpMessageSchema,
+  MouseWheelMessageSchema,
   KeyDownMessageSchema,
   KeyUpMessageSchema,
   ClipboardMessageSchema,

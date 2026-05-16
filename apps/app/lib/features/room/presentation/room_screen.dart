@@ -494,6 +494,10 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         case 'mouse_up':
           final button = _parseMouseButton(json['button'] as String);
           _inputInjector!.mouseUp(x, y, button);
+        case 'mouse_wheel':
+          final deltaX = (json['deltaX'] as num?)?.toInt() ?? 0;
+          final deltaY = (json['deltaY'] as num?)?.toInt() ?? 0;
+          _inputInjector!.mouseWheel(x, y, deltaX, deltaY);
         case 'key_down':
           final key = json['key'] as String? ?? '';
           final modifiers = _parseModifiers(json['modifiers']);

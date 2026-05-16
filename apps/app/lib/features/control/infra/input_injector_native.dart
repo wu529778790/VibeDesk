@@ -19,6 +19,8 @@ class _NoOpInputInjector extends InputInjector {
   @override
   Future<void> mouseUp(int x, int y, MouseButton button) async {}
   @override
+  Future<void> mouseWheel(int x, int y, int deltaX, int deltaY) async {}
+  @override
   Future<void> keyDown(String key, List<ModifierKey> modifiers) async {}
   @override
   Future<void> keyUp(String key, List<ModifierKey> modifiers) async {}

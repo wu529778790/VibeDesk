@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../domain/input_event.dart' as input;
@@ -49,17 +50,20 @@ class _ControlOverlayState extends State<ControlOverlay> {
               widget.onSizeChanged?.call(widgetSize);
             });
 
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onPanUpdate: _onPanUpdate,
-              onPanDown: _onPanDown,
-              onPanEnd: _onPanEnd,
-              onSecondaryTapDown: _onSecondaryTapDown,
-              onSecondaryTapUp: _onSecondaryTapUp,
-              child: RTCVideoView(
-                widget.renderer,
-                objectFit:
-                    RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+            return Listener(
+              onPointerSignal: _onPointerSignal,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: _onPanUpdate,
+                onPanDown: _onPanDown,
+                onPanEnd: _onPanEnd,
+                onSecondaryTapDown: _onSecondaryTapDown,
+                onSecondaryTapUp: _onSecondaryTapUp,
+                child: RTCVideoView(
+                  widget.renderer,
+                  objectFit:
+                      RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+                ),
               ),
             );
           },
@@ -107,6 +111,17 @@ class _ControlOverlayState extends State<ControlOverlay> {
       details.localPosition.dy,
       input.MouseButton.right,
     ));
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent) {
+      widget.onInputEvent(input.MouseWheelEvent(
+        event.localPosition.dx,
+        event.localPosition.dy,
+        event.scrollDelta.dx.round(),
+        event.scrollDelta.dy.round(),
+      ));
+    }
   }
 
   void _handleKeyEvent(KeyEvent event) {
