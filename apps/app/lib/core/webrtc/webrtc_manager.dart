@@ -5,15 +5,18 @@ class WebRTCManager {
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
   RTCDataChannel? _dataChannel;
+  RTCDataChannel? _audioChannel;
   final _iceBuffer = IceCandidateBuffer();
   final void Function(MediaStream)? onRemoteStream;
   final void Function(RTCDataChannel)? onDataChannel;
+  final void Function(RTCDataChannel)? onAudioChannel;
   final void Function(RTCIceCandidate)? onIceCandidate;
   final void Function(RTCIceConnectionState)? onIceConnectionStateChange;
 
   WebRTCManager({
     this.onRemoteStream,
     this.onDataChannel,
+    this.onAudioChannel,
     this.onIceCandidate,
     this.onIceConnectionStateChange,
   });
@@ -36,8 +39,13 @@ class WebRTCManager {
     };
 
     _pc!.onDataChannel = (channel) {
-      _dataChannel = channel;
-      onDataChannel?.call(_dataChannel!);
+      if (channel.label == 'audio') {
+        _audioChannel = channel;
+        onAudioChannel?.call(_audioChannel!);
+      } else {
+        _dataChannel = channel;
+        onDataChannel?.call(_dataChannel!);
+      }
     };
 
     _pc!.onIceConnectionState = (state) {
@@ -87,9 +95,17 @@ class WebRTCManager {
     return _dataChannel!;
   }
 
+  Future<RTCDataChannel> createAudioDataChannel() async {
+    _audioChannel = await _pc!.createDataChannel('audio',
+        RTCDataChannelInit()..ordered = false..maxRetransmits = 0);
+    return _audioChannel!;
+  }
+
   RTCDataChannel? get dataChannel => _dataChannel;
+  RTCDataChannel? get audioChannel => _audioChannel;
 
   void dispose() {
+    _audioChannel?.close();
     _localStream?.dispose();
     _pc?.close();
     _pc = null;

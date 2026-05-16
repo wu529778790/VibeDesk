@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:ffi' as ffi;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../shared/models/user_role.dart';
 import '../../../core/logger.dart';
+import '../../../core/audio/audio_capturer_factory.dart';
+import '../../../core/audio/audio_player_factory.dart';
 import '../../../core/signaling/signal_server_provider.dart';
 import '../../../core/signaling/signaling_client.dart';
 import '../../settings/presentation/settings_screen.dart' show iceConfigProvider;
@@ -37,6 +41,9 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   WebRTCManager? _webrtc;
   ScreenCapturer? _capturer;
   InputInjector? _inputInjector;
+  AudioCapturer? _audioCapturer;
+  AudioPlayer? _audioPlayer;
+  StreamSubscription<Uint8List>? _audioSubscription;
 
   // UI state
   SignalingState _signalingState = SignalingState.disconnected;
@@ -60,6 +67,11 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
 
   @override
   void dispose() {
+    _audioSubscription?.cancel();
+    _audioCapturer?.stop();
+    _audioCapturer?.dispose();
+    _audioPlayer?.stop();
+    _audioPlayer?.dispose();
     _roomIdController.dispose();
     _capturer?.stop();
     _inputInjector?.dispose();
@@ -244,6 +256,23 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
 
       dc.onMessage = _handleDataChannelMessage;
 
+      // Create audio DataChannel and start system audio capture
+      if (Platform.isWindows) {
+        try {
+          final audioDc = await _webrtc!.createAudioDataChannel();
+          _audioCapturer = createAudioCapturer();
+          final audioStream = _audioCapturer!.start();
+          _audioSubscription = audioStream.listen((chunk) {
+            if (audioDc.state == RTCDataChannelState.RTCDataChannelOpen) {
+              audioDc.send(RTCDataChannelMessage.fromBinary(chunk));
+            }
+          });
+          Logger.info('Host: audio capture started');
+        } catch (e) {
+          Logger.error('Host: audio capture failed', e);
+        }
+      }
+
       // Create and send offer
       final offer = await _webrtc!.createOffer();
       _signaling?.send({
@@ -296,6 +325,16 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
         onDataChannel: (channel) {
           Logger.info('Client: data channel received: ${channel.label}');
           channel.onMessage = _handleDataChannelMessage;
+        },
+        onAudioChannel: (channel) {
+          Logger.info('Client: audio data channel received');
+          _audioPlayer = createAudioPlayer();
+          _audioPlayer!.init(sampleRate: 16000, channels: 1, bitsPerSample: 16);
+          channel.onMessage = (message) {
+            if (message.isBinary) {
+              _audioPlayer!.feed(message.binary);
+            }
+          };
         },
         onIceConnectionStateChange: (state) {
           Logger.info('Client: ICE connection state: $state');
@@ -630,6 +669,14 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   }
 
   void _disconnectAndGoBack() {
+    _audioSubscription?.cancel();
+    _audioSubscription = null;
+    _audioCapturer?.stop();
+    _audioCapturer?.dispose();
+    _audioCapturer = null;
+    _audioPlayer?.stop();
+    _audioPlayer?.dispose();
+    _audioPlayer = null;
     _capturer?.stop();
     _capturer = null;
     _webrtc?.dispose();
