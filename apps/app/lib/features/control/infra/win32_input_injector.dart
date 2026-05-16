@@ -129,6 +129,10 @@ class Win32InputInjector extends InputInjector {
     // Move to position first
     await mouseMove(x, y);
 
+    // macOS trackpad sends pixel-level deltas (1-20px per frame),
+    // Windows WHEEL_DELTA = 120 per notch. Scale up so trackpad scrolling works.
+    const scale = 12;
+
     // Vertical scroll
     if (deltaY != 0) {
       final inp = calloc<INPUT>();
@@ -138,9 +142,8 @@ class Win32InputInjector extends InputInjector {
         inp.ref.Anonymous.mi.dy = _normalizeY(y.toDouble());
         inp.ref.Anonymous.mi.dwFlags =
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_WHEEL;
-        // WHEEL_DELTA = 120, scroll amount is in multiples of WHEEL_DELTA
         inp.ref.Anonymous.mi.mouseData =
-            (-deltaY).clamp(-1200, 1200);
+            (-deltaY * scale).clamp(-1200, 1200);
         SendInput(1, inp, sizeOf<INPUT>());
       } finally {
         calloc.free(inp);
@@ -157,7 +160,7 @@ class Win32InputInjector extends InputInjector {
         inp.ref.Anonymous.mi.dwFlags =
             MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_HWHEEL;
         inp.ref.Anonymous.mi.mouseData =
-            (-deltaX).clamp(-1200, 1200);
+            (-deltaX * scale).clamp(-1200, 1200);
         SendInput(1, inp, sizeOf<INPUT>());
       } finally {
         calloc.free(inp);
