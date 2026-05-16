@@ -63,23 +63,11 @@ class _HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<_HomeScreen> {
   bool _navigatedToSettings = false;
+  bool _connectTriggered = false;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
-  }
-
-  void _init() {
-    final urlAsync = ref.read(signalServerProvider);
-    if (urlAsync.isLoading) return;
-
-    final url = urlAsync.valueOrNull;
-    if (url == null || url.isEmpty) {
-      _navigateToSettings();
-      return;
-    }
-
+  void _tryConnect(String url) {
+    if (_connectTriggered) return;
+    _connectTriggered = true;
     final conn = ref.read(signalConnectionProvider.notifier);
     if (!conn.isConnected) {
       conn.connect(url);
@@ -110,6 +98,9 @@ class _HomeScreenState extends ConsumerState<_HomeScreen> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    // Trigger auto-connect once URL is loaded
+    _tryConnect(url);
 
     final isConnected = connStatus.status == SignalConnectionStatus.connected;
     final isFailed = connStatus.status == SignalConnectionStatus.failed;
@@ -151,7 +142,10 @@ class _HomeScreenState extends ConsumerState<_HomeScreen> {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  onPressed: _init,
+                  onPressed: () {
+                    _connectTriggered = false;
+                    _tryConnect(url);
+                  },
                   child: const Text('Retry'),
                 ),
               ],
