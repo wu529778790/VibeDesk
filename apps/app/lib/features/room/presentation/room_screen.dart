@@ -1,29 +1,23 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io' show Platform;
-import 'dart:ffi' as ffi;
-import 'dart:typed_data';
+import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:go_router/go_router.dart';
-import '../../../shared/models/user_role.dart';
-import '../../../core/logger.dart';
-import '../../../core/audio/audio_capturer_factory.dart';
-import '../../../core/audio/audio_player_factory.dart';
+
 import '../../../core/signaling/signal_server_provider.dart';
-import '../../../core/signaling/signaling_client.dart';
-import '../../settings/presentation/settings_screen.dart' show iceConfigProvider;
-import '../../../core/webrtc/screen_capturer.dart';
-import '../../../core/webrtc/webrtc_manager.dart';
-import '../../control/domain/input_event.dart' as input;
-import '../../control/domain/input_injector.dart';
-import '../../control/infra/input_injector_factory.dart';
-import '../../control/presentation/control_overlay.dart';
-import '../../screen/presentation/screen_provider.dart';
-import '../../../shared/widgets/connection_status.dart';
 import '../../../core/webrtc/connection_quality_provider.dart';
+import '../../control/domain/input_event.dart' as input;
+import '../../control/presentation/control_overlay.dart';
+import '../../file_transfer/presentation/file_picker_button.dart';
+import '../../file_transfer/presentation/file_transfer_provider.dart';
+import '../../file_transfer/presentation/file_transfer_ui.dart';
+import '../../screen/presentation/screen_provider.dart';
+import '../../../shared/models/user_role.dart';
+import '../../../shared/widgets/connection_status.dart';
+import '../domain/session_state.dart';
+import 'coordinate_scaler.dart';
+import 'session_provider.dart';
 
 class RoomScreen extends ConsumerStatefulWidget {
   final UserRole role;
@@ -34,28 +28,8 @@ class RoomScreen extends ConsumerStatefulWidget {
 }
 
 class _RoomScreenState extends ConsumerState<RoomScreen> {
-  // Controllers
   final _roomIdController = TextEditingController();
-
-  // Core instances owned by this widget
-  SignalingClient? _signaling;
-  WebRTCManager? _webrtc;
-  ScreenCapturer? _capturer;
-  InputInjector? _inputInjector;
-  AudioCapturer? _audioCapturer;
-  AudioPlayer? _audioPlayer;
-  StreamSubscription<Uint8List>? _audioSubscription;
-
-  // UI state
-  SignalingState _signalingState = SignalingState.disconnected;
-  ConnectionStatus _connectionStatus = ConnectionStatus.idle;
-  String? _roomCode;
-  String? _errorMessage;
-  bool _hasRemoteStream = false;
-
-  // Host screen size (used by client for coordinate scaling)
-  int _hostScreenWidth = 1920;
-  int _hostScreenHeight = 1080;
+  final _scaler = CoordinateScaler();
   Size _widgetSize = Size.zero;
 
   bool get _isHost => widget.role == UserRole.host;
@@ -63,558 +37,60 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _connectSignaling());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupFileTransferSave();
+      _startSession();
+    });
+  }
+
+  void _setupFileTransferSave() {
+    ref.read(fileTransferProvider.notifier).onSaveFile = (file) async {
+      final dir = await FilePicker.platform.getDirectoryPath();
+      if (dir != null) {
+        final savePath = '$dir${Platform.pathSeparator}${file.fileName}';
+        await File(savePath).writeAsBytes(file.data);
+      }
+    };
   }
 
   @override
   void dispose() {
-    _audioSubscription?.cancel();
-    _audioCapturer?.stop();
-    _audioCapturer?.dispose();
-    _audioPlayer?.stop();
-    _audioPlayer?.dispose();
+    ref.read(sessionProvider.notifier).disconnect();
     _roomIdController.dispose();
-    _capturer?.stop();
-    _inputInjector?.dispose();
-    _webrtc?.dispose();
-    _signaling?.dispose();
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // Win32 screen size
-  // ---------------------------------------------------------------------------
-
-  (int, int) _getWin32ScreenSize() {
-    if (Platform.isWindows) {
-      try {
-        final user32 = ffi.DynamicLibrary.open('user32.dll');
-        final getSystemMetrics = user32.lookupFunction<
-            ffi.Int32 Function(ffi.Int32),
-            int Function(int)>('GetSystemMetrics');
-        final width = getSystemMetrics(0);
-        final height = getSystemMetrics(1);
-        if (width > 0 && height > 0) return (width, height);
-      } catch (e) {
-        Logger.error('Failed to get screen size via Win32', e);
-      }
-    } else if (Platform.isMacOS) {
-      try {
-        final coreGraphics = ffi.DynamicLibrary.open(
-            '/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics');
-        final cgMainDisplayID = coreGraphics.lookupFunction<
-            ffi.Uint32 Function(),
-            int Function()>('CGMainDisplayID');
-        final cgDisplayPixelsWide = coreGraphics.lookupFunction<
-            ffi.Int32 Function(ffi.Uint32),
-            int Function(int)>('CGDisplayPixelsWide');
-        final cgDisplayPixelsHigh = coreGraphics.lookupFunction<
-            ffi.Int32 Function(ffi.Uint32),
-            int Function(int)>('CGDisplayPixelsHigh');
-        final displayId = cgMainDisplayID();
-        final width = cgDisplayPixelsWide(displayId);
-        final height = cgDisplayPixelsHigh(displayId);
-        if (width > 0 && height > 0) return (width, height);
-      } catch (e) {
-        Logger.error('Failed to get screen size via CoreGraphics', e);
-      }
-    }
-    return (1920, 1080);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Signaling
-  // ---------------------------------------------------------------------------
-
-  void _connectSignaling() {
+  void _startSession() {
     final url = ref.read(signalServerProvider).valueOrNull;
     if (url == null || url.isEmpty) return;
 
-    _signaling = SignalingClient(
-      onMessage: _handleSignalingMessage,
-      onStateChanged: (state) {
-        setState(() => _signalingState = state);
-
-        if (state == SignalingState.connected && _isHost) {
-          _signaling!.send({'type': 'create_room'});
-          setState(() {
-            _connectionStatus = ConnectionStatus.connecting;
-          });
-        }
-      },
-      onError: (msg) {
-        setState(() {
-          _connectionStatus = ConnectionStatus.failed;
-          _errorMessage = msg;
-        });
-      },
-    );
-
-    _signaling!.connect(url);
-    setState(() {
-      _connectionStatus = ConnectionStatus.connecting;
-      _errorMessage = null;
-    });
-  }
-
-  void _handleSignalingMessage(SignalingMessage msg) {
-    Logger.info('Signaling message: ${msg.type}');
-
-    switch (msg.type) {
-      case 'room_created':
-        setState(() {
-          _roomCode = msg.data['roomId'] as String;
-        });
-
-      case 'peer_joined':
-        _startHostNegotiation();
-
-      case 'room_joined':
-        Logger.info('Room joined, waiting for offer...');
-
-      case 'offer':
-        _handleOffer(msg.data['sdp'] as String);
-
-      case 'answer':
-        _handleAnswer(msg.data['sdp'] as String);
-
-      case 'ice_candidate':
-        _handleRemoteIceCandidate(msg.data['candidate']);
-
-      case 'peer_left':
-        setState(() {
-          _connectionStatus = ConnectionStatus.failed;
-          _errorMessage = 'Peer disconnected';
-        });
-
-      case 'error':
-        setState(() {
-          _connectionStatus = ConnectionStatus.failed;
-          _errorMessage = msg.data['message'] as String? ?? 'Unknown error';
-        });
+    if (_isHost) {
+      ref.read(sessionProvider.notifier).connectAndCreateRoom(url);
     }
   }
-
-  // ---------------------------------------------------------------------------
-  // Client: join room
-  // ---------------------------------------------------------------------------
 
   void _joinRoom() {
     final code = _roomIdController.text.trim();
     if (code.isEmpty) return;
-    _signaling!.send({'type': 'join_room', 'roomId': code});
-    setState(() {
-      _roomCode = code;
-      _connectionStatus = ConnectionStatus.connecting;
-    });
+    final url = ref.read(signalServerProvider).valueOrNull;
+    if (url == null) return;
+    ref.read(sessionProvider.notifier).connectAndJoinRoom(url, code);
   }
 
-  // ---------------------------------------------------------------------------
-  // Host WebRTC flow
-  // ---------------------------------------------------------------------------
-
-  Future<void> _startHostNegotiation() async {
-    try {
-      final iceServers = ref.read(iceConfigProvider).toMapList();
-
-      _webrtc = WebRTCManager(
-        onIceCandidate: (candidate) {
-          _signaling?.send({
-            'type': 'ice_candidate',
-            'candidate': {
-              'candidate': candidate.candidate,
-              'sdpMid': candidate.sdpMid,
-              'sdpMLineIndex': candidate.sdpMLineIndex,
-            },
-            'targetPeerId': 'client',
-          });
-        },
-        onRemoteStream: (_) {},
-        onDataChannel: (channel) {
-          Logger.info('Host: data channel received: ${channel.label}');
-          _inputInjector = createInputInjector();
-          channel.onMessage = _handleDataChannelMessage;
-        },
-        onIceConnectionStateChange: (state) {
-          Logger.info('Host: ICE connection state: $state');
-          if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
-              state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
-            setState(() {
-              _connectionStatus = ConnectionStatus.failed;
-              _errorMessage = 'Connection lost';
-            });
-          }
-        },
-      );
-
-      await _webrtc!.initialize(iceServers: iceServers);
-
-      // Capture screen and add as local stream
-      _capturer = ScreenCapturer();
-      final stream = await _capturer!.captureScreen();
-      await _webrtc!.addLocalStream(stream);
-
-      // Create data channel for input events
-      final dc = await _webrtc!.createDataChannel('control');
-      _inputInjector = createInputInjector();
-
-      // Get host screen size and configure injector
-      final (screenW, screenH) = _getWin32ScreenSize();
-      _inputInjector!.setScreenSize(screenW, screenH);
-      Logger.info('Host screen size: ${screenW}x$screenH');
-
-      // Send screen size to client when channel is ready
-      void sendScreenSize() {
-        dc.send(RTCDataChannelMessage(jsonEncode({
-          'type': 'screen_size',
-          'width': screenW,
-          'height': screenH,
-        })));
-      }
-
-      if (dc.state == RTCDataChannelState.RTCDataChannelOpen) {
-        sendScreenSize();
-      }
-      dc.onDataChannelState = (state) {
-        if (state == RTCDataChannelState.RTCDataChannelOpen) {
-          sendScreenSize();
-        }
-      };
-
-      dc.onMessage = _handleDataChannelMessage;
-
-      // Create audio DataChannel and start system audio capture
-      if (Platform.isWindows) {
-        try {
-          final audioDc = await _webrtc!.createAudioDataChannel();
-          _audioCapturer = createAudioCapturer();
-          final audioStream = _audioCapturer!.start();
-          _audioSubscription = audioStream.listen((chunk) {
-            if (audioDc.state == RTCDataChannelState.RTCDataChannelOpen) {
-              audioDc.send(RTCDataChannelMessage.fromBinary(chunk));
-            }
-          });
-          Logger.info('Host: audio capture started');
-        } catch (e) {
-          Logger.error('Host: audio capture failed', e);
-        }
-      }
-
-      // Create and send offer
-      final offer = await _webrtc!.createOffer();
-      _signaling?.send({
-        'type': 'offer',
-        'sdp': offer.sdp,
-        'targetPeerId': 'client',
-      });
-
-      Logger.info('Host: offer sent');
-    } catch (e) {
-      Logger.error('Host negotiation failed', e);
-      setState(() {
-        _connectionStatus = ConnectionStatus.failed;
-        _errorMessage = 'Failed to start screen sharing: $e';
-      });
-    }
+  void _disconnectAndGoBack() {
+    ref.read(connectionQualityProvider.notifier).stop();
+    ref.read(sessionProvider.notifier).disconnect();
+    ref.read(screenProvider.notifier).stop();
+    context.go('/');
   }
-
-  // ---------------------------------------------------------------------------
-  // Client WebRTC flow
-  // ---------------------------------------------------------------------------
-
-  Future<void> _handleOffer(String sdp) async {
-    try {
-      final iceServers = ref.read(iceConfigProvider).toMapList();
-
-      _webrtc = WebRTCManager(
-        onIceCandidate: (candidate) {
-          _signaling?.send({
-            'type': 'ice_candidate',
-            'candidate': {
-              'candidate': candidate.candidate,
-              'sdpMid': candidate.sdpMid,
-              'sdpMLineIndex': candidate.sdpMLineIndex,
-            },
-            'targetPeerId': 'host',
-          });
-        },
-        onRemoteStream: (stream) async {
-          Logger.info('Client: remote stream received');
-          final renderer = RTCVideoRenderer();
-          await renderer.initialize();
-          renderer.srcObject = stream;
-          ref.read(screenProvider.notifier).setRemoteRenderer(renderer);
-          // Attach connection quality monitor
-          final pc = _webrtc?.peerConnection;
-          if (pc != null) {
-            ref.read(connectionQualityProvider.notifier).attach(pc);
-          }
-          setState(() {
-            _hasRemoteStream = true;
-            _connectionStatus = ConnectionStatus.connected;
-          });
-        },
-        onDataChannel: (channel) {
-          Logger.info('Client: data channel received: ${channel.label}');
-          channel.onMessage = _handleDataChannelMessage;
-        },
-        onAudioChannel: (channel) {
-          Logger.info('Client: audio data channel received');
-          _audioPlayer = createAudioPlayer();
-          _audioPlayer!.init(sampleRate: 16000, channels: 1, bitsPerSample: 16);
-          channel.onMessage = (message) {
-            if (message.isBinary) {
-              _audioPlayer!.feed(message.binary);
-            }
-          };
-        },
-        onIceConnectionStateChange: (state) {
-          Logger.info('Client: ICE connection state: $state');
-          if (state == RTCIceConnectionState.RTCIceConnectionStateFailed ||
-              state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
-            setState(() {
-              _connectionStatus = ConnectionStatus.failed;
-              _errorMessage = 'Connection lost';
-            });
-          }
-        },
-      );
-
-      await _webrtc!.initialize(iceServers: iceServers);
-
-      // Set remote description (offer)
-      await _webrtc!.setRemoteDescription(
-        RTCSessionDescription(sdp, 'offer'),
-      );
-
-      // Create and send answer
-      final answer = await _webrtc!.createAnswer();
-      _signaling?.send({
-        'type': 'answer',
-        'sdp': answer.sdp,
-        'targetPeerId': 'host',
-      });
-
-      Logger.info('Client: answer sent');
-    } catch (e) {
-      Logger.error('Client handleOffer failed', e);
-      setState(() {
-        _connectionStatus = ConnectionStatus.failed;
-        _errorMessage = 'Failed to establish connection: $e';
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Answer handling (host)
-  // ---------------------------------------------------------------------------
-
-  Future<void> _handleAnswer(String sdp) async {
-    try {
-      await _webrtc?.setRemoteDescription(
-        RTCSessionDescription(sdp, 'answer'),
-      );
-      // Attach connection quality monitor
-      final pc = _webrtc?.peerConnection;
-      if (pc != null) {
-        ref.read(connectionQualityProvider.notifier).attach(pc);
-      }
-      setState(() {
-        _connectionStatus = ConnectionStatus.connected;
-      });
-      Logger.info('Host: remote description set from answer');
-    } catch (e) {
-      Logger.error('Host handleAnswer failed', e);
-      setState(() {
-        _connectionStatus = ConnectionStatus.failed;
-        _errorMessage = 'Failed to set answer: $e';
-      });
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // ICE candidate handling
-  // ---------------------------------------------------------------------------
-
-  Future<void> _handleRemoteIceCandidate(dynamic candidateData) async {
-    if (candidateData == null || _webrtc == null) return;
-    try {
-      final map = candidateData as Map<String, dynamic>;
-      await _webrtc!.addIceCandidate(
-        RTCIceCandidate(
-          map['candidate'] as String?,
-          map['sdpMid'] as String?,
-          map['sdpMLineIndex'] as int?,
-        ),
-      );
-      Logger.info('Remote ICE candidate added');
-    } catch (e) {
-      Logger.error('Failed to add ICE candidate', e);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // DataChannel input handling
-  // ---------------------------------------------------------------------------
 
   void _sendInputEvent(input.InputEvent event) {
-    final dc = _webrtc?.dataChannel;
-    if (dc == null) return;
-
-    // Scale coordinates from widget space to host screen space
-    if (event is input.MouseMoveEvent) {
-      final scaled = _scaleCoordinates(event.x, event.y);
-      dc.send(RTCDataChannelMessage(input.MouseMoveEvent(
-        scaled.$1,
-        scaled.$2,
-      ).serialize()));
-    } else if (event is input.MouseDownEvent) {
-      final scaled = _scaleCoordinates(event.x, event.y);
-      dc.send(RTCDataChannelMessage(input.MouseDownEvent(
-        scaled.$1,
-        scaled.$2,
-        event.button,
-      ).serialize()));
-    } else if (event is input.MouseUpEvent) {
-      final scaled = _scaleCoordinates(event.x, event.y);
-      dc.send(RTCDataChannelMessage(input.MouseUpEvent(
-        scaled.$1,
-        scaled.$2,
-        event.button,
-      ).serialize()));
-    } else {
-      dc.send(RTCDataChannelMessage(event.serialize()));
-    }
-  }
-
-  /// Scale widget-local coordinates to host screen coordinates.
-  /// Accounts for objectFit=contain letterboxing.
-  (double, double) _scaleCoordinates(double widgetX, double widgetY) {
     final renderer = ref.read(screenProvider);
-    if (renderer == null || _widgetSize == Size.zero) {
-      return (widgetX, widgetY);
+    (double, double) fullScale(double x, double y) {
+      if (renderer == null) return (x, y);
+      return _scaler.scale(x, y, renderer);
     }
-
-    final videoWidth = renderer.videoWidth.toDouble();
-    final videoHeight = renderer.videoHeight.toDouble();
-    if (videoWidth <= 0 || videoHeight <= 0) return (widgetX, widgetY);
-
-    final widgetW = _widgetSize.width;
-    final widgetH = _widgetSize.height;
-
-    // Calculate the actual rendered video area within the widget (contain mode)
-    final videoAspect = videoWidth / videoHeight;
-    final widgetAspect = widgetW / widgetH;
-
-    double renderW, renderH, offsetX, offsetY;
-    if (videoAspect > widgetAspect) {
-      // Video is wider than widget → width fits, height has letterboxing
-      renderW = widgetW;
-      renderH = widgetW / videoAspect;
-      offsetX = 0;
-      offsetY = (widgetH - renderH) / 2;
-    } else {
-      // Video is taller than widget → height fits, width has pillarboxing
-      renderH = widgetH;
-      renderW = widgetH * videoAspect;
-      offsetX = (widgetW - renderW) / 2;
-      offsetY = 0;
-    }
-
-    // Check if click is outside the video area (in letterbox/pillarbox zone)
-    if (widgetX < offsetX ||
-        widgetX > offsetX + renderW ||
-        widgetY < offsetY ||
-        widgetY > offsetY + renderH) {
-      // Click is in the black area, map to nearest video edge
-      widgetX = widgetX.clamp(offsetX, offsetX + renderW);
-      widgetY = widgetY.clamp(offsetY, offsetY + renderH);
-    }
-
-    // Map from widget coords → video pixel coords (0..videoWidth, 0..videoHeight)
-    final videoX = (widgetX - offsetX) / renderW * videoWidth;
-    final videoY = (widgetY - offsetY) / renderH * videoHeight;
-
-    // Map from video pixel coords → host screen coords
-    final hostX = videoX / videoWidth * _hostScreenWidth;
-    final hostY = videoY / videoHeight * _hostScreenHeight;
-
-    return (hostX, hostY);
-  }
-
-  void _handleDataChannelMessage(RTCDataChannelMessage message) {
-    try {
-      final json = jsonDecode(message.text) as Map<String, dynamic>;
-      final type = json['type'] as String?;
-
-      // Handle screen_size message (client receives from host)
-      if (type == 'screen_size') {
-        _hostScreenWidth = (json['width'] as num?)?.toInt() ?? 1920;
-        _hostScreenHeight = (json['height'] as num?)?.toInt() ?? 1080;
-        Logger.info(
-            'Received host screen size: ${_hostScreenWidth}x$_hostScreenHeight');
-        return;
-      }
-
-      if (type == null || _inputInjector == null) return;
-
-      final x = (json['x'] as num?)?.toInt() ?? 0;
-      final y = (json['y'] as num?)?.toInt() ?? 0;
-
-      switch (type) {
-        case 'mouse_move':
-          _inputInjector!.mouseMove(x, y);
-        case 'mouse_down':
-          final button = _parseMouseButton(json['button'] as String);
-          _inputInjector!.mouseDown(x, y, button);
-        case 'mouse_up':
-          final button = _parseMouseButton(json['button'] as String);
-          _inputInjector!.mouseUp(x, y, button);
-        case 'mouse_wheel':
-          final deltaX = (json['deltaX'] as num?)?.toInt() ?? 0;
-          final deltaY = (json['deltaY'] as num?)?.toInt() ?? 0;
-          _inputInjector!.mouseWheel(x, y, deltaX, deltaY);
-        case 'key_down':
-          final key = json['key'] as String? ?? '';
-          final modifiers = _parseModifiers(json['modifiers']);
-          _inputInjector!.keyDown(key, modifiers);
-        case 'key_up':
-          final key = json['key'] as String? ?? '';
-          final modifiers = _parseModifiers(json['modifiers']);
-          _inputInjector!.keyUp(key, modifiers);
-      }
-    } catch (e) {
-      Logger.error('Failed to handle data channel message', e);
-    }
-  }
-
-  input.MouseButton _parseMouseButton(String? name) {
-    switch (name) {
-      case 'right':
-        return input.MouseButton.right;
-      case 'middle':
-        return input.MouseButton.middle;
-      default:
-        return input.MouseButton.left;
-    }
-  }
-
-  List<input.ModifierKey> _parseModifiers(dynamic modifiers) {
-    if (modifiers is! List) return [];
-    return modifiers.map((m) {
-      switch (m) {
-        case 'shift':
-          return input.ModifierKey.shift;
-        case 'ctrl':
-          return input.ModifierKey.ctrl;
-        case 'alt':
-          return input.ModifierKey.alt;
-        case 'meta':
-          return input.ModifierKey.meta;
-        default:
-          return input.ModifierKey.shift;
-      }
-    }).toList();
+    ref.read(sessionProvider.notifier).sendInputEvent(event, fullScale);
   }
 
   // ---------------------------------------------------------------------------
@@ -623,25 +99,29 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Client with remote stream: fullscreen, no AppBar
-    if (!_isHost && _hasRemoteStream) {
+    final session = ref.watch(sessionProvider);
+
+    // Client connected with remote stream: fullscreen
+    if (!_isHost && session.phase == SessionPhase.connected) {
       return _buildClientFullscreen();
     }
 
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: _buildBody(),
+      appBar: _buildAppBar(session),
+      body: _buildBody(session),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Client fullscreen
+  // ---------------------------------------------------------------------------
 
   Widget _buildClientFullscreen() {
     final renderer = ref.watch(screenProvider);
     if (renderer == null) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
 
@@ -654,18 +134,21 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             onInputEvent: _sendInputEvent,
             onSizeChanged: (size) {
               if (_widgetSize != size) {
-                setState(() => _widgetSize = size);
+                setState(() {
+                  _widgetSize = size;
+                  _scaler.widgetSize = size;
+                });
               }
             },
           ),
         ),
-        // Connection quality indicator (top-left)
+        // Connection quality indicator
         Positioned(
           top: 8,
           left: 8,
           child: _buildQualityIndicator(),
         ),
-        // Floating disconnect button (top-right, semi-transparent)
+        // Disconnect button
         Positioned(
           top: 8,
           right: 8,
@@ -674,40 +157,21 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
               color: Colors.transparent,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white70, size: 28),
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black45,
-                ),
+                style: IconButton.styleFrom(backgroundColor: Colors.black45),
                 onPressed: _disconnectAndGoBack,
               ),
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  PreferredSizeWidget? _buildAppBar() {
-    if (_connectionStatus == ConnectionStatus.connected && _isHost) {
-      return AppBar(
-        title: const Text('Sharing Screen'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: _disconnectAndGoBack,
+        // File picker button
+        Positioned(
+          top: 8,
+          right: 52,
+          child: const FilePickerButton(),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: ConnectionStatusBadge(status: _connectionStatus),
-          ),
-        ],
-      );
-    }
-    return AppBar(
-      title: Text(_isHost ? 'Share Screen' : 'Remote Control'),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: _disconnectAndGoBack,
-      ),
+        // File transfer progress overlay
+        const FileTransferOverlay(),
+      ],
     );
   }
 
@@ -738,10 +202,7 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
             Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
             const SizedBox(width: 6),
             Text(
@@ -754,28 +215,44 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
     );
   }
 
-  void _disconnectAndGoBack() {
-    ref.read(connectionQualityProvider.notifier).stop();
-    _audioSubscription?.cancel();
-    _audioSubscription = null;
-    _audioCapturer?.stop();
-    _audioCapturer?.dispose();
-    _audioCapturer = null;
-    _audioPlayer?.stop();
-    _audioPlayer?.dispose();
-    _audioPlayer = null;
-    _capturer?.stop();
-    _capturer = null;
-    _webrtc?.dispose();
-    _webrtc = null;
-    _signaling?.dispose();
-    _signaling = null;
-    ref.read(screenProvider.notifier).stop();
-    context.go('/');
+  // ---------------------------------------------------------------------------
+  // AppBar
+  // ---------------------------------------------------------------------------
+
+  PreferredSizeWidget? _buildAppBar(SessionState session) {
+    if (session.phase == SessionPhase.connected && _isHost) {
+      return AppBar(
+        title: const Text('Sharing Screen'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _disconnectAndGoBack,
+        ),
+        actions: [
+          const FilePickerButton(),
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: ConnectionStatusBadge(
+              status: ConnectionStatus.connected,
+            ),
+          ),
+        ],
+      );
+    }
+    return AppBar(
+      title: Text(_isHost ? 'Share Screen' : 'Remote Control'),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: _disconnectAndGoBack,
+      ),
+    );
   }
 
-  Widget _buildBody() {
-    if (_errorMessage != null) {
+  // ---------------------------------------------------------------------------
+  // Body
+  // ---------------------------------------------------------------------------
+
+  Widget _buildBody(SessionState session) {
+    if (session.errorMessage != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -786,14 +263,16 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
                   size: 48, color: Theme.of(context).colorScheme.error),
               const SizedBox(height: 16),
               Text(
-                _errorMessage!,
+                session.errorMessage!,
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: _reset,
+                onPressed: () {
+                  ref.read(sessionProvider.notifier).disconnect();
+                  _startSession();
+                },
                 child: const Text('Retry'),
               ),
             ],
@@ -802,161 +281,121 @@ class _RoomScreenState extends ConsumerState<RoomScreen> {
       );
     }
 
-    if (_signalingState == SignalingState.connecting) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Connecting to server...'),
-          ],
-        ),
-      );
-    }
-
-    if (_signalingState == SignalingState.disconnected) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            const Text('Reconnecting...'),
-          ],
-        ),
-      );
-    }
-
-    return _buildConnectedBody();
-  }
-
-  Widget _buildConnectedBody() {
-    // Host: waiting for client
-    if (_isHost && _roomCode != null && _connectionStatus != ConnectionStatus.connected) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+    switch (session.phase) {
+      case SessionPhase.connecting:
+        return const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Room Code',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _roomCode!,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 4,
-                    ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Waiting for client to join...',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              const CircularProgressIndicator(),
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Connecting to server...'),
             ],
           ),
-        ),
-      );
-    }
+        );
 
-    // Host: connected and sharing
-    if (_isHost && _connectionStatus == ConnectionStatus.connected) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.screen_share,
-                size: 64, color: Colors.green.shade400),
-            const SizedBox(height: 16),
-            const Text(
-              'Screen sharing active',
-              style: TextStyle(fontSize: 18),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Client: need to enter room code
-    if (!_isHost && _roomCode == null && !_hasRemoteStream) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
+      case SessionPhase.waitingForPeer when _isHost:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  controller: _roomIdController,
-                  decoration: const InputDecoration(
-                    labelText: 'Enter Room Code',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.vpn_key),
-                  ),
-                  keyboardType: TextInputType.number,
+                const Text('Room Code',
+                    style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 8),
+                Text(
+                  session.roomCode ?? '',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 4,
+                      ),
                 ),
+                const SizedBox(height: 24),
+                const Text('Waiting for client to join...'),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _joinRoom,
-                  child: const Text('Join Room'),
-                ),
+                const CircularProgressIndicator(),
               ],
             ),
           ),
-        ),
-      );
-    }
+        );
 
-    // Client: waiting for stream
-    if (!_isHost && !_hasRemoteStream) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+      case SessionPhase.waitingForPeer when !_isHost:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _roomIdController,
+                    decoration: const InputDecoration(
+                      labelText: 'Enter Room Code',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.vpn_key),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _joinRoom,
+                    child: const Text('Join Room'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+      case SessionPhase.negotiating:
+        return const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Establishing connection...'),
+            ],
+          ),
+        );
+
+      case SessionPhase.connected when _isHost:
+        return Stack(
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Waiting for stream...'),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.screen_share, size: 64, color: Colors.green.shade400),
+                  const SizedBox(height: 16),
+                  const Text('Screen sharing active', style: TextStyle(fontSize: 18)),
+                ],
+              ),
+            ),
+            const FileTransferOverlay(),
           ],
-        ),
-      );
+        );
+
+      case SessionPhase.connected when !_isHost:
+        return const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Waiting for stream...'),
+            ],
+          ),
+        );
+
+      case SessionPhase.idle:
+        return const Center(child: Text('Disconnected'));
+
+      default:
+        return const Center(child: CircularProgressIndicator());
     }
-
-    // Client: showing remote stream — handled by build() fullscreen
-    if (!_isHost && _hasRemoteStream) {
-      return const SizedBox.shrink();
-    }
-
-    return const Center(child: Text('Unexpected state'));
-  }
-
-  void _reset() {
-    ref.read(connectionQualityProvider.notifier).stop();
-    _capturer?.stop();
-    _capturer = null;
-    _webrtc?.dispose();
-    _webrtc = null;
-    _signaling?.dispose();
-    _signaling = null;
-    ref.read(screenProvider.notifier).stop();
-    setState(() {
-      _signalingState = SignalingState.disconnected;
-      _connectionStatus = ConnectionStatus.idle;
-      _roomCode = null;
-      _errorMessage = null;
-      _hasRemoteStream = false;
-      _hostScreenWidth = 1920;
-      _hostScreenHeight = 1080;
-    });
-    _connectSignaling();
   }
 }

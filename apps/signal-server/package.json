@@ -12,6 +12,7 @@
   "dependencies": {
     "@vibedesk/protocol": "file:../../packages/protocol",
     "fastify": "^5.3.3",
+    "jose": "^5.9.6",
     "ws": "^8.18.2",
     "zod": "^3.24.4",
     "dotenv": "^16.5.0"

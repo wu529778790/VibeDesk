@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/platform/auto_launch_service.dart';
 import '../../../core/signaling/signal_server_provider.dart';
+import '../../clipboard/presentation/clipboard_sync_provider.dart';
 import '../domain/ice_config.dart';
 
 final iceConfigProvider = StateProvider<IceConfig>((ref) => const IceConfig());
@@ -138,6 +139,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 setState(() => _autoLaunch = AutoLaunchService.isEnabled);
               },
             ),
+            Consumer(builder: (context, ref, _) {
+              final enabled = ref.watch(clipboardSyncProvider);
+              return SwitchListTile(
+                title: const Text('Clipboard Sync'),
+                subtitle: const Text('Sync clipboard text between local and remote'),
+                value: enabled,
+                onChanged: (value) {
+                  ref.read(clipboardSyncProvider.notifier).setEnabled(value);
+                },
+              );
+            }),
             const SizedBox(height: 32),
           ],
 

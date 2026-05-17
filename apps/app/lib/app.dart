@@ -5,6 +5,10 @@ import 'shared/models/user_role.dart';
 import 'shared/theme/app_theme.dart';
 import 'shared/widgets/connection_status.dart';
 import 'core/signaling/signal_server_provider.dart';
+import 'features/auth/presentation/auth_provider.dart';
+import 'features/auth/domain/auth_state.dart';
+import 'features/auth/presentation/login_screen.dart';
+import 'features/auth/presentation/device_list_screen.dart';
 import 'features/room/presentation/room_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
 
@@ -31,6 +35,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/devices',
+        builder: (context, state) => const DeviceListScreen(),
       ),
     ],
   );
@@ -113,6 +125,19 @@ class _HomeScreenState extends ConsumerState<_HomeScreen> {
             icon: const Icon(Icons.settings),
             onPressed: () => context.push('/settings'),
           ),
+          Consumer(builder: (context, ref, _) {
+            final auth = ref.watch(authProvider);
+            if (auth.status == VibeDeskAuthStatus.authenticated) {
+              return IconButton(
+                icon: const Icon(Icons.devices),
+                onPressed: () => context.push('/devices'),
+              );
+            }
+            return IconButton(
+              icon: const Icon(Icons.login),
+              onPressed: () => context.push('/login'),
+            );
+          }),
         ],
       ),
       body: Center(

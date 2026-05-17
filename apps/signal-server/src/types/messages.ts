@@ -7,4 +7,7 @@ export {
   type AnswerMessage,
   type IceCandidateMessage,
   type LeaveRoomMessage,
+  type ConnectDeviceMessage,
+  type DeviceListRequest,
+  type DeviceListResponse,
 } from "@vibedesk/protocol";

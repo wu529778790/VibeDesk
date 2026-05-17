@@ -1,6 +1,7 @@
 import 'dart:io';
 import '../domain/input_injector.dart';
 import '../domain/input_event.dart';
+import 'linux_input_injector.dart';
 import 'macos_input_injector.dart';
 import 'win32_input_injector.dart';
 
@@ -10,6 +11,9 @@ InputInjector createPlatformInputInjector() {
   }
   if (Platform.isMacOS) {
     return MacOSInputInjector();
+  }
+  if (Platform.isLinux) {
+    return LinuxInputInjector();
   }
   return _NoOpInputInjector();
 }

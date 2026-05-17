@@ -62,6 +62,7 @@ export type ClipboardMessage = z.infer<typeof ClipboardMessageSchema>;
 
 export const FileTransferStartMessageSchema = z.object({
   type: z.literal("file_transfer_start"),
+  transfer_id: z.string(),
   name: z.string(),
   size: z.number(),
 });
@@ -71,7 +72,7 @@ export type FileTransferStartMessage = z.infer<
 
 export const FileTransferChunkMessageSchema = z.object({
   type: z.literal("file_transfer_chunk"),
-  data: z.string(), // base64
+  transfer_id: z.string(),
   index: z.number(),
 });
 export type FileTransferChunkMessage = z.infer<
@@ -80,9 +81,18 @@ export type FileTransferChunkMessage = z.infer<
 
 export const FileTransferEndMessageSchema = z.object({
   type: z.literal("file_transfer_end"),
+  transfer_id: z.string(),
 });
 export type FileTransferEndMessage = z.infer<
   typeof FileTransferEndMessageSchema
+>;
+
+export const FileTransferCancelMessageSchema = z.object({
+  type: z.literal("file_transfer_cancel"),
+  transfer_id: z.string(),
+});
+export type FileTransferCancelMessage = z.infer<
+  typeof FileTransferCancelMessageSchema
 >;
 
 // --- Union ---
@@ -98,6 +108,7 @@ export const DataChannelMessageSchema = z.discriminatedUnion("type", [
   FileTransferStartMessageSchema,
   FileTransferChunkMessageSchema,
   FileTransferEndMessageSchema,
+  FileTransferCancelMessageSchema,
 ]);
 
 export type DataChannelMessage = z.infer<typeof DataChannelMessageSchema>;

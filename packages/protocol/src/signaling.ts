@@ -85,6 +85,32 @@ export const ErrorMessageSchema = z.object({
 });
 export type ErrorMessage = z.infer<typeof ErrorMessageSchema>;
 
+// --- Device discovery (authenticated) ---
+
+export const ConnectDeviceMessageSchema = z.object({
+  type: z.literal("connect_device"),
+  targetDeviceId: z.string(),
+});
+export type ConnectDeviceMessage = z.infer<typeof ConnectDeviceMessageSchema>;
+
+export const DeviceListRequestSchema = z.object({
+  type: z.literal("device_list_request"),
+});
+export type DeviceListRequest = z.infer<typeof DeviceListRequestSchema>;
+
+export const DeviceListResponseSchema = z.object({
+  type: z.literal("device_list"),
+  devices: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      platform: z.string(),
+      online: z.boolean(),
+    })
+  ),
+});
+export type DeviceListResponse = z.infer<typeof DeviceListResponseSchema>;
+
 // --- Union ---
 
 export const SignalingMessageSchema = z.discriminatedUnion("type", [
@@ -99,6 +125,9 @@ export const SignalingMessageSchema = z.discriminatedUnion("type", [
   LeaveRoomMessageSchema,
   PeerLeftMessageSchema,
   ErrorMessageSchema,
+  ConnectDeviceMessageSchema,
+  DeviceListRequestSchema,
+  DeviceListResponseSchema,
 ]);
 
 export type SignalingMessage = z.infer<typeof SignalingMessageSchema>;
